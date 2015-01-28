@@ -5,11 +5,11 @@
 Simu_presence 
 --]] 
 
---------------------------------
--- YAPS Presence Simulator V2.3.1
+---------------------------------
+-- YAPS Presence Simulator V2.3.2
 -- SebcBien
 -- Janvier 2015
---------------------------------
+---------------------------------
 --V2.3.1
 -- small notification and debug changes
 --V2.3
@@ -63,11 +63,7 @@ local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the 
 local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: simulation is on or off 
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset 
 local endtime 
-version = "2.3" 
-if (simu == "0") then 
-	fibaro:debug("No need to start scene, simu = 0, Exiting") 
-	fibaro:abort(); 
-end
+version = "2.3.2" 
 
 SimulatorPresenceEngine = {}; 
 
@@ -161,11 +157,10 @@ function SimulatorPresenceEngine:EndSimulation()
 end
 
 function SimulatorPresenceEngine:ExitSimulation()
-	SimulatorPresenceEngine:TurnOff(ID_devices_lights); 
+	--SimulatorPresenceEngine:TurnOff(ID_devices_lights); 
 	Debug("red","Presence Simulator is Terminated");
 	pushMessage("Presence Simulator is Terminated");
 end
-
 -- function to switch off devices in the list 
 function SimulatorPresenceEngine:TurnOff(group) 
 	Debug("red","TurnOff All lights!");
@@ -188,13 +183,23 @@ function SimulatorPresenceEngine:TurnOff(group)
 -- tester startup type et si autostart ou simu = 0 ne pas push et exit
 
 Debug("green", "Simulate Presence at Home | v" .. version ); 
-Debug( "green", "----------------------------------------"); 
+Debug( "green", "------------------------------------------"); 
+if (simu == "0") then 
+	Debug("red","No need to start Simulation, simu = 0, Exiting");
+	fibaro:abort(); 
+end
 pushMessage("Simulate Presence will start today at "..start_simu)
 ExtraDebug("Today's sunset at "..fibaro:getValue(1, "sunsetHour").." - Simulation will stop at "..stop_hour..":"..stop_minute);
 
 while (simu=="1" or simu=="0" ) do 
 	SimulatorPresenceEngine:EndTimeCalc(); 
 	--local start_simu = "00:01"  -- uncomment this line when testing to force a start hour. ex: 1 min after saving the scene.
+		-- Condition to end simulation 
+	if (simu == "0") then 
+		SimulatorPresenceEngine:ExitSimulation();
+		Debug("red","Simu = 0, Exit from scene");
+		fibaro:abort(); 
+	end
 	-- define if  nighttime (sunset)
 	if (os.date("%H:%M") >= start_simu) then 
 		sunset = 1 
@@ -221,14 +226,9 @@ while (simu=="1" or simu=="0" ) do
 			Debug("grey", "Waiting for next Sunset -> Simulation OFF. Recheck in 5 Min"); 
 		end
 	end 
-	-- Condition to end simulation 
-	if (simu == "0") then 
-		SimulatorPresenceEngine:ExitSimulation();
-		Debug("red","Simu = 0, Exit from scene");
-		fibaro:abort(); 
-	end
+
 	ExtraDebug("sleeping 5min before re-check");
 	fibaro:sleep(5*60*1000);
 	simu = fibaro:getGlobal("Simu_presence"); 
 	manualOveride = fibaro:getGlobal("overideSimuSunset"); 
-end 
+end
