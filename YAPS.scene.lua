@@ -66,7 +66,7 @@ local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: sim
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset 
 local endtime 
 local wait_for_tomorrow = 0
-local boucle = 0
+local NotifLoop = 30
 version = "2.4.1" 
 
 SimulatorPresenceEngine = {}; 
@@ -110,9 +110,9 @@ function SimulatorPresenceEngine:EndTimeCalc()
 	local sunrise = tonumber(string.sub (fibaro:getValue(1,'sunriseHour'), 1 , 2) ) * 60 + tonumber(string.sub(fibaro:getValue(1,'sunriseHour'), 4) )
 	local sunset = tonumber(string.sub (fibaro:getValue(1,'sunsetHour'), 1 , 2) ) * 60 + tonumber(string.sub(fibaro:getValue(1,'sunsetHour'), 4) )
 	local now = currentHour.hour * 60 + currentHour.min;
-	ExtraDebug ("debug info: Sunrise : " .. sunrise .. " Sunset : "..sunset .. " Now : " ..now);
-	ExtraDebug ("debug info: Current OS Time" ..os.time()) 
-	ExtraDebug ("debug info: Original planed EndTime " ..endtime) 
+	--ExtraDebug ("debug info: Sunrise : " .. sunrise .. " Sunset : "..sunset .. " Now : " ..now);
+	--ExtraDebug ("debug info: Current OS Time" ..os.time()) 
+	--ExtraDebug ("debug info: Original planed EndTime " ..endtime) 
 	--ExtraDebug ("debug info: os.date: "..os.date("%H:%M").. " sunrisehour: "..fibaro:getValue(1, "sunriseHour"))
 	if ((wait_for_tomorrow == 0) and (endtime < os.time())) then -- if endtime is gone and it's the first launch of simulator
 		endtime = endtime + 24*60*60 -- add 24h at endtime after the night is gone
@@ -127,7 +127,7 @@ function SimulatorPresenceEngine:EndTimeCalc()
 		ExtraDebug ("Added One Day to Endtime: " .. endtime);
 		ExtraDebug ("Recalculated Simulation StartHour (Sunset): " .. start_simu); 	
 	end 
-	ExtraDebug ("debug info: Recalculated planed EndTime " ..endtime) 
+	--ExtraDebug ("debug info: Recalculated planed EndTime " ..endtime) 
 	end 
 -- function to simulate a presence 
 function SimulatorPresenceEngine:Launch() 
@@ -172,7 +172,6 @@ function SimulatorPresenceEngine:EndSimulation()
 		Debug("grey", "Presence Simulator will Restart tomorrow around ".. fibaro:getValue(1, "sunsetHour"));
 		pushMessage("Presence Simulator will Restart tomorrow around ".. fibaro:getValue(1, "sunsetHour"));
 		wait_for_tomorrow = 1 -- will make EndTimeCalc add 24h to endtime during daytime
-		wait_for_tomorrow = 1
 	end
 end
 
@@ -235,7 +234,7 @@ while (simu=="1" or simu=="0" ) do
 			SimulatorPresenceEngine:EndSimulation();
 		end
 			--fibaro:debug("sunset: "..sunset .. "endtime: " .. endtime .. "ostime: " .. os.time());
-		if manualOveride == "0" and sunset == 0 then 
+		if manualOveride == "0" and sunset == 0 and NotifLoop == 30 then 
 			Debug("grey", "Waiting for next Sunset -> Simulation OFF."); 
 		end
 	end 
@@ -248,14 +247,14 @@ while (simu=="1" or simu=="0" ) do
 		Debug("red","Simu = 0, Exit from scene");
 		fibaro:abort(); 
 	end
-		if boucle <= 6 then
-    		if boucle == 6 then boucle = 0
+		if NotifLoop <= 30 then
+    		if NotifLoop == 30 then NotifLoop = 0
 			end
-			if boucle == 0 then ExtraDebug("checking every 5min for the next hour")
+			if NotifLoop == 0 then ExtraDebug("Looping to check for changes every 2min")
 			end
-			boucle = boucle + 1
+			NotifLoop = NotifLoop + 1
     	end
-	fibaro:sleep(5*60*1000);
+	fibaro:sleep(2*60*1000);
 	simu = fibaro:getGlobal("Simu_presence"); 
 	manualOveride = fibaro:getGlobal("overideSimuSunset"); 
 
