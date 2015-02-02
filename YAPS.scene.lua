@@ -6,10 +6,12 @@ Simu_presence
 --]] 
 
 --------------------------------
--- YAPS Presence Simulator V2.4.1
+-- YAPS Presence Simulator V2.5.0
 -- SebcBien
--- Janvier 2015
+-- Février 2015
 --------------------------------
+--V2.5.0
+-- fixed simulation starting if restarted between endtime & midnight
 --v2.4.1
 -- fixed big bug simulator restarting after end time
 --V2.3.1
@@ -43,31 +45,32 @@ local stop_hour = "01"; -- Hour when you want simulation to stop
 local stop_minute = "10"; -- Minute of the hour you want simulation to stop 
 -- note 1: the script will not exit while waiting the random time of the last light turned on. So end time can be longer than specified end time
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while simulation runs)
-local rndmaxtime = 15 -- random time of light change in minutes --> here each device is on maximum 30min 
+local rndmaxtime = 15; -- random time of light change in minutes --> here each device is on maximum 30min 
 local ID_devices_lights = {id["LAMPE_SDB"],id["LAMPE_BUREAU"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
 --local ID_devices_lights = {id["LAMPE_BUREAU"],id["LAMPE_CELLIER"]} -- IDs of lights to use in simulation
 local activatePush = true; -- activate push when simulation starts and stops 
 --local ID_Smartphone = 53; -- ID of your smartphone 
 --local ID_Smartphones = {id["PHONE_NEXUS_5"],id["PHONE_NEXUS_4"]}; 
 local ID_Smartphones = {id["PHONE_NEXUS_5"]}; 
-local ID_On_After_Simu = id["LAMPE_HALL"] -- Only One ID of a lamp to turn on after simulation ends (set 0 to disable)
-local Manual_Stop = 1 -- 0 will not turn on the lamp "ID_On_After_Simu" at the end of the script. Replace this variable by a global value if you want to automate
+local ID_On_After_Simu = id["LAMPE_HALL"]; -- Only One ID of a lamp to turn on after simulation ends (set 0 to disable)
+local Manual_Stop = 1; -- 0 will not turn on the lamp "ID_On_After_Simu" at the end of the script. Replace this variable by a global value if you want to automate
 --------------------- USER SETTINGS END ---------------------------- 
 ----------------------ADVANCED SETTINGS----------------------------- 
 local showStandardDebugInfo = true; -- Debug shown in white 
-local showExtraDebugInfo = true; -- Debug shown in orange 
-local numbers_lights = #ID_devices_lights -- numbers of light devices listed above 
+local showExtraDebugInfo = false; -- Debug shown in orange 
+local numbers_lights = #ID_devices_lights; -- numbers of light devices listed above 
 local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the simulation is forced
 -------------------------------------------------------------------- 
 ----------------------------------- 
 ----- Do not change code below ---- 
 ----------------------------------- 
+local version = "2.5.0"; 
 local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: simulation is on or off 
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset 
-local endtime 
-local wait_for_tomorrow = 0
-local NotifLoop = 30
-version = "2.4.1" 
+local endtime;
+local wait_for_tomorrow = 1;
+local NotifLoop = 30;
+
 
 SimulatorPresenceEngine = {}; 
 
@@ -87,6 +90,11 @@ StandardDebug = function (debugMessage)
 		Debug( "white", debugMessage); 
 	end 
 	end 
+
+round = function (num, idp)
+  local mult = 10^(idp or 0)
+  return math.floor(num * mult + 0.5) / mult
+end
 -- function push message to mobile 
 pushMessage = function (sendPush) 
 	if (activatePush) then 
@@ -144,7 +152,7 @@ function SimulatorPresenceEngine:Launch()
 		lightstatus = fibaro:getValue(random_light, 'value') --get the value of the random light after his update 
 		StandardDebug('light ID:'..random_light..' status:'..lightstatus);
 		local sleeptime = math.random(rndmaxtime*60000) --random sleep 
-		fibaro:debug("entering loop of " .. sleeptime/60000 .. "minutes");
+		StandardDebug("entering loop of " .. round(sleeptime/60000,2) .. " minutes");
 		-- This modification allows to exit the scene if the Simu_presence global var changes to 0 during the random  sleep
 			local counterexitsimu = 200
 				while (counterexitsimu > 0) do
@@ -157,9 +165,9 @@ function SimulatorPresenceEngine:Launch()
 					end
 				fibaro:sleep(sleeptime/200);
 				end
-			fibaro:debug("exiting loop of " .. sleeptime/60000 .. "minutes");
+			StandardDebug("exiting loop of " .. round(sleeptime/60000,2) .. " minutes");
 		local sleeptimemin = math.abs(sleeptime/60000) 
-		StandardDebug('sleeptime:'..sleeptimemin);
+		--StandardDebug('sleeptime:'..sleeptimemin);
 		simu = fibaro:getGlobal("Simu_presence"); --verify the global value, if the virtual device is deactivated, the scene stops. 
 		manualOveride = fibaro:getGlobalValue("overideSimuSunset");
 	end 
@@ -201,14 +209,14 @@ function SimulatorPresenceEngine:TurnOff(group)
 -- tester startup type et si autostart ou simu = 0 ne pas push et exit
 Debug("green", "Presence Simulator | v" .. version ); 
 Debug( "green", "--------------------------------");
-
+-- if stop hour is between 00 and 12h then will consider that stop hour is before midnight
+if tonumber(stop_hour) <= 12 then wait_for_tomorrow = 0 end
 -- Main Loop ---------------------------------------
 if (simu == "0") then 
 	Debug("red","Not starting Simulation (Simu_presence = 0)");
 	SimulatorPresenceEngine:ExitSimulation();
 	fibaro:abort(); 
 end
-
 pushMessage("Scheduled Simulation starting time: " .. start_simu);
 ExtraDebug("Today's sunset is at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute);
 
@@ -227,7 +235,6 @@ while (simu=="1" or simu=="0" ) do
 			SimulatorPresenceEngine:Launch(); --launch the simulation. 
 			SimulatorPresenceEngine:EndSimulation();
 		end 
-
 		if manualOveride == "1" then 
 			Debug("grey", "Manual Override Activated -> Simulation ON");
 			SimulatorPresenceEngine:Launch(); --launch the simulation. 
@@ -257,5 +264,4 @@ while (simu=="1" or simu=="0" ) do
 	fibaro:sleep(2*60*1000);
 	simu = fibaro:getGlobal("Simu_presence"); 
 	manualOveride = fibaro:getGlobal("overideSimuSunset"); 
-
 end
