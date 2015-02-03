@@ -26,10 +26,10 @@ Simu_presence
 -- added list of mobiles
 
 if (fibaro:countScenes() > 1) then 
-	fibaro:debug("More than one scene active, exiting!"); 
+	--fibaro:debug("More than one scene active, exiting!"); 
 	fibaro:abort(); 
 end 
---------------------- USER SETTINGS -------------------------------- 
+--------------------- USER SETTINGS --------------------------------
 local id = {
 	LAMPE_SDB			= 16,
 	LAMPE_CH_AMIS		= 24,
