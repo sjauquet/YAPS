@@ -10,6 +10,8 @@ Simu_presence
 -- SebcBien
 -- Février 2015
 --------------------------------
+--V2.6.0
+-- Added the possibility to select always on light during simulation
 --V2.5.0
 -- fixed simulation starting if restarted between endtime & midnight
 --v2.4.1
@@ -46,13 +48,14 @@ local stop_minute = "10"; -- Minute of the hour you want simulation to stop
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while simulation runs)
 local rndmaxtime = 15; -- random time of light change in minutes --> here each device is on maximum 30min 
 local ID_devices_lights = {id["LAMPE_SDB"],id["LAMPE_BUREAU"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
+local ID_devices_lights_always_on = {id["LAMPE_BUREAU"],id["LAMPE_SALON"]} -- IDs of lights to use in simulation 
 --local ID_devices_lights = {id["LAMPE_BUREAU"],id["LAMPE_CELLIER"]} -- IDs of lights to use in simulation
 local activatePush = true; -- activate push when simulation starts and stops 
 --local ID_Smartphone = 53; -- ID of your smartphone 
 --local ID_Smartphones = {id["PHONE_NEXUS_5"],id["PHONE_NEXUS_4"]}; 
 local ID_Smartphones = {id["PHONE_NEXUS_5"]}; 
-local ID_On_After_Simu = id["LAMPE_HALL"]; -- Only One ID of a lamp to turn on after simulation ends (set 0 to disable)
-local Manual_Stop = 1; -- 0 will not turn on the lamp "ID_On_After_Simu" at the end of the script. Replace this variable by a global value if you want to automate
+local ID_On_After_Simu = 0; -- If next line is commented, no lamp will turn on after simu
+local ID_On_After_Simu = id["LAMPE_HALL"]; -- Only One ID of a lamp to turn on after simulation ends
 --------------------- USER SETTINGS END ---------------------------- 
 ----------------------ADVANCED SETTINGS----------------------------- 
 local showStandardDebugInfo = true; -- Debug shown in white 
@@ -138,6 +141,7 @@ function SimulatorPresenceEngine:EndTimeCalc()
 function SimulatorPresenceEngine:Launch() 
 	pushMessage("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute) 
 	ExtraDebug("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute ); 
+	SimulatorPresenceEngine:TurnOn(ID_devices_lights_always_on); 
 	while ((os.time() <= endtime) and (simu == "1")) or ((manualOveride == "1")) do 
 		-- original code: while ((os.time() <= endtime) and (simu == "1")) or ((os.time() <= endtime) and (simu == "1") and (manualOveride == "1")) do 
 		if time == endtime then StandardDebug("time and endtime same value -> end") end 
@@ -172,6 +176,7 @@ function SimulatorPresenceEngine:Launch()
 	
 function SimulatorPresenceEngine:EndSimulation() 
 	SimulatorPresenceEngine:TurnOff(ID_devices_lights); 
+	SimulatorPresenceEngine:TurnOff(ID_devices_lights_always_on);
 	Debug("red","Simulation is deactivated");
 	if (simu == "1") then
 		Debug("grey", "Presence Simulator will Restart tomorrow around ".. fibaro:getValue(1, "sunsetHour"));
@@ -186,7 +191,7 @@ function SimulatorPresenceEngine:ExitSimulation()
 	pushMessage("Presence Simulator is Terminated");
 end
 -- Switch off devices in the list 
-function SimulatorPresenceEngine:TurnOff(group) 
+function SimulatorPresenceEngine:TurnOff(group,group2) 
 	Debug("red","TurnOff All lights!");
 	local name, id2; 
 	local ID_devices_group = group; 
@@ -199,11 +204,33 @@ function SimulatorPresenceEngine:TurnOff(group)
 	end 
 	StandardDebug("Device:" .. name .. " Off "); 
 	end 
-	  if (ID_On_After_Simu ~= 0 and Manual_Stop == 1) then
-	  fibaro:call(ID_On_After_Simu, "turnOn"); 
+	
+	  if ID_On_After_Simu ~= 0 then
+	  fibaro:call(ID_On_After_Simu, "turnOn");
+    	name = fibaro:getName(ID_On_After_Simu); 
+			if (name == nil or name == string.char(0)) then 
+				name = "Unknown" 	
+			end 
+      Debug("red","Manual Light Settings: Turned On light: " .. name);
 	  end
 	end 
-
+-- Switch on devices in the list 
+function SimulatorPresenceEngine:TurnOn(group) 
+	Debug("red","Turning On always on lights:");
+	local name, id2; 
+	local ID_devices_group = group; 
+	for i=1, #ID_devices_group do 
+	id2 = tonumber(ID_devices_group[i]); 
+	fibaro:call(id2, "turnOn"); 
+	name = fibaro:getName(id2); 
+	if (name == nil or name == string.char(0)) then 
+		name = "Unknown" 	
+	end 
+	StandardDebug("Device:" .. name .. " On "); 
+	end
+	Debug("red","Now randomizing other lights...");
+	end 
+	
 Debug("green", "Presence Simulator | v" .. version ); 
 Debug( "green", "--------------------------------");
 -- if stop hour is between 00 and 12h then will consider that stop hour is before midnight
