@@ -5,11 +5,11 @@
 Simu_presence 
 --]] 
 
---------------------------------
+---------------------------------
 -- YAPS Presence Simulator V2.6.0
 -- SebcBien
 -- Février 2015
---------------------------------
+---------------------------------
 --V2.6.0
 -- Added the possibility to select always on light during simulation
 --V2.5.0
@@ -47,14 +47,14 @@ local stop_minute = "10"; -- Minute of the hour you want simulation to stop
 -- note 1: the script will not exit while waiting the random time of the last light turned on. So end time can be longer than specified end time
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while simulation runs)
 local rndmaxtime = 15; -- random time of light change in minutes --> here each device is on maximum 30min 
-local ID_devices_lights_always_on = {id["LAMPE_BUREAU"],id["LAMPE_SALON"]} -- IDs of lights to use in simulation 
-local ID_devices_lights = {id["LAMPE_SDB"],id["LAMPE_BUREAU"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
+local ID_devices_lights_always_on = {id["LAMPE_BUREAU"]} -- IDs of lights to use in simulation 
+local ID_devices_lights = {id["LAMPE_SDB"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
 --local ID_devices_lights = {id["LAMPE_BUREAU"],id["LAMPE_CELLIER"]} -- Reduced set for test purposes
 local activatePush = true; -- activate push when simulation starts and stops 
 --local ID_Smartphones = {id["PHONE_NEXUS_5"],id["PHONE_NEXUS_4"]}; 
 local ID_Smartphones = {id["PHONE_NEXUS_5"]}; -- list of device receiving Push
-local ID_On_After_Simu = 0; -- If next line is commented, no lamp will turn on after simu
-local ID_On_After_Simu = id["LAMPE_HALL"]; -- Only One ID of a lamp to turn on after simulation ends
+local ID_On_After_Simu = 0; -- If next line is commented, no light will turn on after simulation ends
+local ID_On_After_Simu = id["LAMPE_HALL"]; -- Only One ID of a light to turn on after simulation ends. Comment this line to turn off this feature
 --------------------- USER SETTINGS END ---------------------------- 
 ----------------------ADVANCED SETTINGS----------------------------- 
 local showStandardDebugInfo = true; -- Debug shown in white 
@@ -239,35 +239,37 @@ function SimulatorPresenceEngine:TurnOn(group)
 	
 Debug("green", "Presence Simulator | v" .. version ); 
 Debug( "green", "--------------------------------");
--- if stop hour is between 00 and 12h then will consider that stop hour is before midnight
-if tonumber(stop_hour) <= 12 then wait_for_tomorrow = 0 end
--- Main Loop ---------------------------------------
+if tonumber(stop_hour) <= 12 then wait_for_tomorrow = 0 end -- if stop hour is between 00 and 12h then will consider that stop hour is before midnight
+
+------------------------ Main Loop ----------------------------------
 if (simu == "0") then 
 	Debug("red","Not starting Simulation (Simu_presence = 0)");
 	SimulatorPresenceEngine:ExitSimulation();
 	fibaro:abort(); 
 end
+
 pushMessage("Scheduled Simulation starting time: " .. start_simu);
 ExtraDebug("Today's sunset is at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute);
 
 while (simu=="1" or simu=="0" ) do
 	SimulatorPresenceEngine:EndTimeCalc(); 
-	-- local start_simu = "00:01"  -- uncomment this line when testing to force a start hour. ex: 1 min after saving the scene.
-	-- define if nighttime (sunset)
-	if (os.date("%H:%M") >= start_simu) then 
+	-- local start_simu = "00:01"  -- uncomment this line when testing to force a start hour (for the first loop)
+
+	if (os.date("%H:%M") >= start_simu) then -- define if nighttime (sunset)
 		sunset = 1 
 	else 
 		sunset = 0 
 	end 
+	
 	if (simu == "1") then 
 		if sunset == 1 and (os.time() <= endtime) then 
 			Debug("grey", "It's sunset time -> Simulation ON");
-			SimulatorPresenceEngine:Launch(); --launch the simulation. 
+			SimulatorPresenceEngine:Launch();
 			SimulatorPresenceEngine:EndSimulation();
 		end 
 		if manualOveride == "1" then 
 			Debug("grey", "Manual Override Activated -> Simulation ON");
-			SimulatorPresenceEngine:Launch(); --launch the simulation. 
+			SimulatorPresenceEngine:Launch();
 			SimulatorPresenceEngine:EndSimulation();
 		end
 			--fibaro:debug("sunset: "..sunset .. "endtime: " .. endtime .. "ostime: " .. os.time());
@@ -278,8 +280,8 @@ while (simu=="1" or simu=="0" ) do
 	if sunset == 1 and (os.time() >= endtime) and (os.time() <= (endtime + 60)) then 
 		Debug("grey","Simulation ended for this night.");
 	end 
-		-- Condition to end simulation 
-	if (simu == "0") then 
+
+	if (simu == "0") then -- Condition to end simulation 
 		SimulatorPresenceEngine:ExitSimulation();
 		Debug("red","Simu = 0, Exit from scene");
 		fibaro:abort(); 
