@@ -27,7 +27,6 @@ if (fibaro:countScenes() > 1) then
 	fibaro:debug("More than one scene active, exiting!"); 
 	fibaro:abort(); 
 end 
-		
 --------------------- USER SETTINGS -------------------------------- 
 local id = {
 	LAMPE_SDB			= 16,
@@ -61,9 +60,8 @@ local showExtraDebugInfo = false; -- Debug shown in orange
 local numbers_lights = #ID_devices_lights; -- numbers of light devices listed above 
 local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the simulation is forced
 -------------------------------------------------------------------- 
------------------------------------ 
------ Do not change code below ---- 
------------------------------------ 
+-------------------- DO NOT CHANGE CODE BELOW ---------------------- 
+--------------------------------------------------------------------
 local version = "2.5.0"; 
 local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: simulation is on or off 
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset 
@@ -71,10 +69,9 @@ local endtime;
 local wait_for_tomorrow = 1;
 local NotifLoop = 30;
 
-
 SimulatorPresenceEngine = {}; 
 
--- debug function 
+-- FONCTIONS
 Debug = function ( color, message ) 
 		fibaro:debug(string.format('<%s style="color:%s;">%s</%s>', "span", color, message, "span")); 
 	end 
@@ -95,7 +92,7 @@ round = function (num, idp)
   local mult = 10^(idp or 0)
   return math.floor(num * mult + 0.5) / mult
 end
--- function push message to mobile 
+-- Push message to mobile 
 pushMessage = function (sendPush) 
 	if (activatePush) then 
     for i=1, #ID_Smartphones do 
@@ -104,7 +101,7 @@ pushMessage = function (sendPush)
     end 
 	end 
 	end
--- function to calculate endtime 
+-- Calculate endtime 
 function SimulatorPresenceEngine:EndTimeCalc() 
 	local start = os.date("%H:%M") 
 	local time = os.time() 
@@ -137,7 +134,7 @@ function SimulatorPresenceEngine:EndTimeCalc()
 	end 
 	--ExtraDebug ("debug info: Recalculated planed EndTime " ..endtime) 
 	end 
--- function to simulate a presence 
+-- Simulate Presence Main 
 function SimulatorPresenceEngine:Launch() 
 	pushMessage("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute) 
 	ExtraDebug("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute ); 
@@ -188,7 +185,7 @@ function SimulatorPresenceEngine:ExitSimulation()
 	Debug("red","Presence Simulator is Terminated");
 	pushMessage("Presence Simulator is Terminated");
 end
--- function to switch off devices in the list 
+-- Switch off devices in the list 
 function SimulatorPresenceEngine:TurnOff(group) 
 	Debug("red","TurnOff All lights!");
 	local name, id2; 
@@ -206,7 +203,7 @@ function SimulatorPresenceEngine:TurnOff(group)
 	  fibaro:call(ID_On_After_Simu, "turnOn"); 
 	  end
 	end 
--- tester startup type et si autostart ou simu = 0 ne pas push et exit
+
 Debug("green", "Presence Simulator | v" .. version ); 
 Debug( "green", "--------------------------------");
 -- if stop hour is between 00 and 12h then will consider that stop hour is before midnight
