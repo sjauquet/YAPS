@@ -66,7 +66,7 @@ local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the 
 --------------------------------------------------------------------
 local version = "2.6.0"; 
 local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: simulation is on or off 
-local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset 
+local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset
 local endtime;
 local wait_for_tomorrow = 1;
 local NotifLoop = 30;
