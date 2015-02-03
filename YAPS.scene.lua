@@ -6,7 +6,7 @@ Simu_presence
 --]] 
 
 --------------------------------
--- YAPS Presence Simulator V2.5.0
+-- YAPS Presence Simulator V2.6.0
 -- SebcBien
 -- Février 2015
 --------------------------------
@@ -47,13 +47,12 @@ local stop_minute = "10"; -- Minute of the hour you want simulation to stop
 -- note 1: the script will not exit while waiting the random time of the last light turned on. So end time can be longer than specified end time
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while simulation runs)
 local rndmaxtime = 15; -- random time of light change in minutes --> here each device is on maximum 30min 
-local ID_devices_lights = {id["LAMPE_SDB"],id["LAMPE_BUREAU"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
 local ID_devices_lights_always_on = {id["LAMPE_BUREAU"],id["LAMPE_SALON"]} -- IDs of lights to use in simulation 
---local ID_devices_lights = {id["LAMPE_BUREAU"],id["LAMPE_CELLIER"]} -- IDs of lights to use in simulation
+local ID_devices_lights = {id["LAMPE_SDB"],id["LAMPE_BUREAU"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
+--local ID_devices_lights = {id["LAMPE_BUREAU"],id["LAMPE_CELLIER"]} -- Reduced set for test purposes
 local activatePush = true; -- activate push when simulation starts and stops 
---local ID_Smartphone = 53; -- ID of your smartphone 
 --local ID_Smartphones = {id["PHONE_NEXUS_5"],id["PHONE_NEXUS_4"]}; 
-local ID_Smartphones = {id["PHONE_NEXUS_5"]}; 
+local ID_Smartphones = {id["PHONE_NEXUS_5"]}; -- list of device receiving Push
 local ID_On_After_Simu = 0; -- If next line is commented, no lamp will turn on after simu
 local ID_On_After_Simu = id["LAMPE_HALL"]; -- Only One ID of a lamp to turn on after simulation ends
 --------------------- USER SETTINGS END ---------------------------- 
@@ -65,7 +64,7 @@ local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the 
 -------------------------------------------------------------------- 
 -------------------- DO NOT CHANGE CODE BELOW ---------------------- 
 --------------------------------------------------------------------
-local version = "2.5.0"; 
+local version = "2.6.0"; 
 local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: simulation is on or off 
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset 
 local endtime;
@@ -175,8 +174,8 @@ function SimulatorPresenceEngine:Launch()
 	end 
 	
 function SimulatorPresenceEngine:EndSimulation() 
-	SimulatorPresenceEngine:TurnOff(ID_devices_lights); 
-	SimulatorPresenceEngine:TurnOff(ID_devices_lights_always_on);
+	SimulatorPresenceEngine:TurnOff(ID_devices_lights,ID_devices_lights_always_on); 
+	--SimulatorPresenceEngine:TurnOff(ID_devices_lights_always_on);
 	Debug("red","Simulation is deactivated");
 	if (simu == "1") then
 		Debug("grey", "Presence Simulator will Restart tomorrow around ".. fibaro:getValue(1, "sunsetHour"));
@@ -202,9 +201,18 @@ function SimulatorPresenceEngine:TurnOff(group,group2)
 	if (name == nil or name == string.char(0)) then 
 		name = "Unknown" 	
 	end 
-	StandardDebug("Device:" .. name .. " Off "); 
+	StandardDebug("Device: " .. name .. " Off "); 
 	end 
-	
+	local ID_devices_group = group2; 
+	for i=1, #ID_devices_group do 
+	id2 = tonumber(ID_devices_group[i]); 
+	fibaro:call(id2, "turnOff"); 
+	name = fibaro:getName(id2); 
+	if (name == nil or name == string.char(0)) then 
+		name = "Unknown" 	
+	end 
+	StandardDebug("Device: " .. name .. " Off "); 
+	end 
 	  if ID_On_After_Simu ~= 0 then
 	  fibaro:call(ID_On_After_Simu, "turnOn");
     	name = fibaro:getName(ID_On_After_Simu); 
@@ -226,7 +234,7 @@ function SimulatorPresenceEngine:TurnOn(group)
 	if (name == nil or name == string.char(0)) then 
 		name = "Unknown" 	
 	end 
-	StandardDebug("Device:" .. name .. " On "); 
+	StandardDebug("Device: " .. name .. " On "); 
 	end
 	Debug("red","Now randomizing other lights...");
 	end 
