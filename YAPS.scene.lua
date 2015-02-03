@@ -6,10 +6,12 @@ Simu_presence
 --]] 
 
 ---------------------------------
--- YAPS Presence Simulator V2.6.0
+-- YAPS Presence Simulator V2.6.1
 -- SebcBien
 -- Février 2015
 ---------------------------------
+--V2.6.1
+-- Added naming of devices in the debug during simulation
 --V2.6.0
 -- Added the possibility to select always on light during simulation
 --V2.5.0
@@ -47,7 +49,7 @@ local stop_minute = "10"; -- Minute of the hour you want simulation to stop
 -- note 1: the script will not exit while waiting the random time of the last light turned on. So end time can be longer than specified end time
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while simulation runs)
 local rndmaxtime = 15; -- random time of light change in minutes --> here each device is on maximum 30min 
-local ID_devices_lights_always_on = {id["LAMPE_BUREAU"]} -- IDs of lights to use in simulation 
+local ID_devices_lights_always_on = {id["LAMPE_BUREAU"]} -- IDs of lights who will always stay on during simulation 
 local ID_devices_lights = {id["LAMPE_SDB"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
 --local ID_devices_lights = {id["LAMPE_BUREAU"],id["LAMPE_CELLIER"]} -- Reduced set for test purposes
 local activatePush = true; -- activate push when simulation starts and stops 
@@ -64,7 +66,7 @@ local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the 
 -------------------------------------------------------------------- 
 -------------------- DO NOT CHANGE CODE BELOW ---------------------- 
 --------------------------------------------------------------------
-local version = "2.6.0"; 
+local version = "2.6.1"; 
 local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: simulation is on or off 
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset
 local endtime;
@@ -150,7 +152,7 @@ function SimulatorPresenceEngine:Launch()
 		if tonumber(lightstatus) == 0 then fibaro:call(random_light, 'turnOn') else fibaro:call(random_light, 'turnOff') end 
 		fibaro:sleep(1000); --necessary to get back the new status, because HC2 is too fast :-) 
 		lightstatus = fibaro:getValue(random_light, 'value') --get the value of the random light after his update 
-		StandardDebug('light ID:'..random_light..' status:'..lightstatus);
+		StandardDebug('light ID:'.. fibaro:getName(random_light) ..' status:'..lightstatus);
 		local sleeptime = math.random(rndmaxtime*60000) --random sleep 
 		StandardDebug("entering loop of " .. round(sleeptime/60000,2) .. " minutes");
 		-- This modification allows to exit the scene if the Simu_presence global var changes to 0 during the random  sleep
