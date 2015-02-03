@@ -175,7 +175,6 @@ function SimulatorPresenceEngine:Launch()
 	
 function SimulatorPresenceEngine:EndSimulation() 
 	SimulatorPresenceEngine:TurnOff(ID_devices_lights,ID_devices_lights_always_on); 
-	--SimulatorPresenceEngine:TurnOff(ID_devices_lights_always_on);
 	Debug("red","Simulation is deactivated");
 	if (simu == "1") then
 		Debug("grey", "Presence Simulator will Restart tomorrow around ".. fibaro:getValue(1, "sunsetHour"));
@@ -185,7 +184,6 @@ function SimulatorPresenceEngine:EndSimulation()
 end
 
 function SimulatorPresenceEngine:ExitSimulation()
-	--SimulatorPresenceEngine:TurnOff(ID_devices_lights); 
 	Debug("red","Presence Simulator is Terminated");
 	pushMessage("Presence Simulator is Terminated");
 end
