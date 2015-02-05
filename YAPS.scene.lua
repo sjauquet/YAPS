@@ -48,7 +48,7 @@ local stop_hour = "01"; -- Hour when you want simulation to stop
 local stop_minute = "10"; -- Minute of the hour you want simulation to stop 
 -- note 1: the script will not exit while waiting the random time of the last light turned on. So end time can be longer than specified end time
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while simulation runs)
-local rndmaxtime = 15; -- random time of light change in minutes --> here each device is on maximum 30min 
+local rndmaxtime = 20; -- random time of light change in minutes --> here each device is on maximum 30min 
 local ID_devices_lights_always_on = {id["LAMPE_BUREAU"]} -- IDs of lights who will always stay on during simulation 
 local ID_devices_lights = {id["LAMPE_SDB"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
 --local ID_devices_lights = {id["LAMPE_BUREAU"],id["LAMPE_CELLIER"]} -- Reduced set for test purposes
@@ -276,7 +276,7 @@ while (simu=="1" or simu=="0" ) do
 		end
 			--fibaro:debug("sunset: "..sunset .. "endtime: " .. endtime .. "ostime: " .. os.time());
 		if manualOveride == "0" and sunset == 0 and NotifLoop == 30 then 
-			Debug("grey", "Waiting for next Sunset -> Simulation OFF."); 
+			Debug("grey", "Waiting for next Sunset: " .. start_simu .. " -> Simulation OFF."); 
 		end
 	end 
 	if sunset == 1 and (os.time() >= endtime) and (os.time() <= (endtime + 60)) then 
