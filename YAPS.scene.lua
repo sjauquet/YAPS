@@ -6,10 +6,13 @@ Simu_presence
 --]] 
 
 ---------------------------------
--- YAPS Presence Simulator V2.6.1
+-- YAPS Presence Simulator
+local version = "2.6.2"; 
 -- SebcBien
--- Février 2015
+-- Avril 2015
 ---------------------------------
+--V2.6.2
+-- Added the possibility to not have an always on lamp
 --V2.6.1
 -- Added naming of devices in the debug during simulation
 --V2.6.0
@@ -40,8 +43,8 @@ local id = {
 	LAMPE_HALL			= 52,
 	LAMPE_CELLIER		= 56,
 	LAMPE_CH_EMILIEN	= 58,
-	PHONE_NEXUS_5		= 53,
-	PHONE_NEXUS_4		= 104
+	PHONE_SEB			= 1323,
+    PHONE_GG			= 1327,
 	}
   
 local stop_hour = "01"; -- Hour when you want simulation to stop 
@@ -49,12 +52,12 @@ local stop_minute = "10"; -- Minute of the hour you want simulation to stop
 -- note 1: the script will not exit while waiting the random time of the last light turned on. So end time can be longer than specified end time
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while simulation runs)
 local rndmaxtime = 20; -- random time of light change in minutes --> here each device is on maximum 30min 
-local ID_devices_lights_always_on = {id["LAMPE_BUREAU"]} -- IDs of lights who will always stay on during simulation 
+local ID_devices_lights_always_on = {id["LAMPE_BUREAU"]} -- IDs of lights who will always stay on during simulation - leave empty array if none -> {}
 local ID_devices_lights = {id["LAMPE_SDB"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
 --local ID_devices_lights = {id["LAMPE_BUREAU"],id["LAMPE_CELLIER"]} -- Reduced set for test purposes
 local activatePush = true; -- activate push when simulation starts and stops 
---local ID_Smartphones = {id["PHONE_NEXUS_5"],id["PHONE_NEXUS_4"]}; 
-local ID_Smartphones = {id["PHONE_NEXUS_5"]}; -- list of device receiving Push
+--local ID_Smartphones = {id["PHONE_SEB"],id["PHONE_GG"]}; 
+local ID_Smartphones = {id["PHONE_SEB"]}; -- list of device receiving Push
 local ID_On_After_Simu = 0; -- If next line is commented, no light will turn on after simulation ends
 local ID_On_After_Simu = id["LAMPE_HALL"]; -- Only One ID of a light to turn on after simulation ends. Comment this line to turn off this feature
 --------------------- USER SETTINGS END ---------------------------- 
@@ -66,7 +69,6 @@ local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the 
 -------------------------------------------------------------------- 
 -------------------- DO NOT CHANGE CODE BELOW ---------------------- 
 --------------------------------------------------------------------
-local version = "2.6.1"; 
 local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: simulation is on or off 
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset
 local endtime;
@@ -142,7 +144,7 @@ function SimulatorPresenceEngine:EndTimeCalc()
 function SimulatorPresenceEngine:Launch() 
 	pushMessage("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute) 
 	ExtraDebug("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute ); 
-	SimulatorPresenceEngine:TurnOn(ID_devices_lights_always_on); 
+	if ID_devices_lights_always_on[1] ~= nil then SimulatorPresenceEngine:TurnOn(ID_devices_lights_always_on); end
 	while ((os.time() <= endtime) and (simu == "1")) or ((manualOveride == "1")) do 
 		-- original code: while ((os.time() <= endtime) and (simu == "1")) or ((os.time() <= endtime) and (simu == "1") and (manualOveride == "1")) do 
 		if time == endtime then StandardDebug("time and endtime same value -> end") end 
@@ -176,7 +178,7 @@ function SimulatorPresenceEngine:Launch()
 	end 
 	
 function SimulatorPresenceEngine:EndSimulation() 
-	SimulatorPresenceEngine:TurnOff(ID_devices_lights,ID_devices_lights_always_on); 
+	if ID_devices_lights_always_on[1] ~= nil then SimulatorPresenceEngine:TurnOff(ID_devices_lights,ID_devices_lights_always_on); end
 	Debug("red","Simulation is deactivated");
 	if (simu == "1") then
 		Debug("grey", "Presence Simulator will Restart tomorrow around ".. fibaro:getValue(1, "sunsetHour"));
