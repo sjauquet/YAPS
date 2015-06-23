@@ -6,11 +6,12 @@ Simu_presence
 --]] 
 
 ---------------------------------
--- YAPS Presence Simulator
-local version = "2.6.2"; 
+-- YAPS Presence Simulator V2.6.3
 -- SebcBien
 -- Avril 2015
 ---------------------------------
+--V2.6.3
+-- Added array of lights to turn on after simu, ONLY if Simu_presence = 1 (normal ending, not ended by setting Simu_presence to 0)
 --V2.6.2
 -- Added the possibility to not have an always on lamp
 --V2.6.1
@@ -43,7 +44,8 @@ local id = {
 	LAMPE_HALL			= 52,
 	LAMPE_CELLIER		= 56,
 	LAMPE_CH_EMILIEN	= 58,
-	PHONE_SEB			= 1323,
+    LAMPE_COULOIR		= 1316,
+	PHONE_SEB			= 1347,
     PHONE_GG			= 1327,
 	}
   
@@ -52,7 +54,7 @@ local stop_minute = "10"; -- Minute of the hour you want simulation to stop
 -- note 1: the script will not exit while waiting the random time of the last light turned on. So end time can be longer than specified end time
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while simulation runs)
 local rndmaxtime = 20; -- random time of light change in minutes --> here each device is on maximum 30min 
-local ID_devices_lights_always_on = {id["LAMPE_BUREAU"]} -- IDs of lights who will always stay on during simulation - leave empty array if none -> {}
+local ID_devices_lights_always_on = {id["LAMPE_BUREAU"],id["LAMPE_COULOIR"]} -- IDs of lights who will always stay on during simulation - leave empty array if none -> {}
 local ID_devices_lights = {id["LAMPE_SDB"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
 --local ID_devices_lights = {id["LAMPE_BUREAU"],id["LAMPE_CELLIER"]} -- Reduced set for test purposes
 local activatePush = true; -- activate push when simulation starts and stops 
@@ -60,6 +62,10 @@ local activatePush = true; -- activate push when simulation starts and stops
 local ID_Smartphones = {id["PHONE_SEB"]}; -- list of device receiving Push
 local ID_On_After_Simu = 0; -- If next line is commented, no light will turn on after simulation ends
 local ID_On_After_Simu = id["LAMPE_HALL"]; -- Only One ID of a light to turn on after simulation ends. Comment this line to turn off this feature
+local ID_On_When_Simu_Deactivated = 0; -- If next line is commented, no light will turn on after simulation is stopped (by putting Simu_presence to 0)
+local ID_On_When_Simu_Deactivated = id["LAMPE_HALL"]; -- Only One ID of a light to turn on after simulation is stopped. Comment this line to turn off this feature
+
+
 --------------------- USER SETTINGS END ---------------------------- 
 ----------------------ADVANCED SETTINGS----------------------------- 
 local showStandardDebugInfo = true; -- Debug shown in white 
@@ -69,6 +75,7 @@ local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the 
 -------------------------------------------------------------------- 
 -------------------- DO NOT CHANGE CODE BELOW ---------------------- 
 --------------------------------------------------------------------
+local version = "2.6.3"; 
 local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: simulation is on or off 
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset
 local endtime;
@@ -79,7 +86,8 @@ SimulatorPresenceEngine = {};
 
 -- FONCTIONS
 Debug = function ( color, message ) 
-		fibaro:debug(string.format('<%s style="color:%s;">%s</%s>', "span", color, message, "span")); 
+		--fibaro:debug(string.format('<%s style="color:%s;">%s</%s>', "span", color, message, "span")); 
+        fibaro:debug(string.format('<%s style="color:%s;">%s</%s>', "span", color, os.date("%a %d/%m", os.time()).." "..message, "span")); 
 	end 
 
 ExtraDebug = function (debugMessage) 
@@ -218,6 +226,15 @@ function SimulatorPresenceEngine:TurnOff(group,group2)
 	  if ID_On_After_Simu ~= 0 then
 	  fibaro:call(ID_On_After_Simu, "turnOn");
     	name = fibaro:getName(ID_On_After_Simu); 
+			if (name == nil or name == string.char(0)) then 
+				name = "Unknown" 	
+			end 
+      Debug("red","Manual Light Settings: Turned On light: " .. name);
+	  end
+	  simu = fibaro:getGlobal("Simu_presence");
+	  if ID_On_When_Simu_Deactivated ~= 0 and simu == 0 then
+	  fibaro:call(ID_On_When_Simu_Deactivated, "turnOn");
+    	name = fibaro:getName(ID_On_When_Simu_Deactivated); 
 			if (name == nil or name == string.char(0)) then 
 				name = "Unknown" 	
 			end 
