@@ -6,10 +6,12 @@ Simu_presence
 --]] 
 
 ---------------------------------
--- YAPS Presence Simulator V2.6.6
+-- YAPS Presence Simulator V3.0.0
 -- SebcBien
 -- August 2015
 ---------------------------------
+--V3.0.0
+-- added smooth cut off of lights at ending time (not with deactivation)
 --V2.6.6
 -- clean up debug messages
 -- added free sms notifications
@@ -66,10 +68,8 @@ local stop_minute = "15"; -- Minute of the hour you want simulation to stop
 local rndmaxtime = 20; -- random time of light change in minutes --> here each device is on maximum 30min 
 local rndmaxendtime = 15; -- random time to add at the stop hour+stop minute so the simulation can be more variable (0 to deactivate)
 local ID_devices_lights_always_on = {id["LAMPE_BUREAU"],id["LAMPE_COULOIR"]} -- IDs of lights who will always stay on during simulation - leave empty array if none -> {}
---local ID_devices_lights_always_on = {id["LAMPE_COULOIR"]} -- IDs of lights who will always stay on during simulation - leave empty array if none -> {}
 local ID_devices_lights = {id["LAMPE_SDB"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
---local ID_devices_lights = {id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in simulation 
---local ID_devices_lights = {id["LAMPE_BUREAU"],id["LAMPE_CELLIER"]} -- Reduced set for test purposes
+--local ID_devices_lights = {id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- Reduced set for test purposes
 local activatePush = true; -- activate push when simulation starts and stops 
 local FreeSms = false; -- activate push with FreeSms (activatePush must be true also) 
 --local ID_Smartphones = {id["PHONE_SEB"],id["PHONE_GG"]}; 
@@ -78,30 +78,27 @@ local ID_On_After_Simu = 0; -- If next line is commented, no light will turn on 
 local ID_On_After_Simu = id["LAMPE_COULOIR"]; -- ID of a light (Only One) to turn on after simulation ends (at specified stop_hour & stop_minute). Comment this line to turn off this feature
 local ID_On_When_Simu_Deactivated = 0; -- If next line is commented, no light will turn on after simulation is stopped (by putting Simu_presence to 0)
 local ID_On_When_Simu_Deactivated = id["LAMPE_HALL"]; -- ID of a light (Only One) to turn on after simulation is stopped (Simu_). Comment this line to turn off this feature
-
-
 --------------------- USER SETTINGS END ---------------------------- 
 ----------------------ADVANCED SETTINGS----------------------------- 
 local showStandardDebugInfo = true; -- Debug shown in white 
-local showExtraDebugInfo = true; -- Debug shown in orange 
-local numbers_lights = #ID_devices_lights; -- numbers of light devices listed above 
-local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the simulation is forced
+local showExtraDebugInfo = false; -- Debug shown in orange 
 -------------------------------------------------------------------- 
 -------------------- DO NOT CHANGE CODE BELOW ---------------------- 
 --------------------------------------------------------------------
-local version = "2.6.6"; 
+local version = "3.0.0"; 
 local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: simulation is on or off 
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset
 local endtime;
 local wait_for_tomorrow = 1;
 local NotifLoop = 30;
+local numbers_lights = #ID_devices_lights; -- numbers of light devices listed above 
+local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the simulation is forced
 
 SimulatorPresenceEngine = {}; 
 
 -- FONCTIONS
 Debug = function ( color, message ) 
-		--fibaro:debug(string.format('<%s style="color:%s;">%s</%s>', "span", color, message, "span")); 
-        fibaro:debug(string.format('<%s style="color:%s;">%s</%s>', "span", color, os.date("%a %d/%m", os.time()).." "..message, "span")); 
+		fibaro:debug(string.format('<%s style="color:%s;">%s</%s>', "span", color, os.date("%a %d/%m", os.time()).." "..message, "span")); 
 end 
 
 ExtraDebug = function (debugMessage) 
@@ -129,6 +126,7 @@ pushMessage = function (sendPush)
     	end 
     	if (FreeSms) then 
     		fibaro:setGlobal("FreeSms", sendPush)
+			ExtraDebug("Message ("..sendPush..") sent to FreeSms"); 
     	end
 	end 
 end
@@ -153,14 +151,14 @@ function SimulatorPresenceEngine:EndTimeCalc()
 	if ((wait_for_tomorrow == 0) and (endtime+(5*60) < os.time())) then -- if endtime (+5 min to avoid sunset shifting) is gone and it's the first launch of simulator
 		endtime = endtime + 24*60*60 -- add 24h at endtime after the night is gone
 		start_simu = fibaro:getValue(1, "sunsetHour"); -- recalculate for next day
-		ExtraDebug ("Added 24H to Endtime (first start ending after midnignt)");
+		ExtraDebug ("wait_for_tomorrow = 0 Added 24H to Endtime (first start ending after midnignt)");
 		ExtraDebug ("Recalculated Simulation StartHour (Sunset): " .. start_simu); 		
 		wait_for_tomorrow = 1	
 	end 
 	if (wait_for_tomorrow == 1 and (endtime+(5*60) < os.time()) and ((now >= sunrise) and (now <= sunset))) then -- if it looping days and endtime (+5 min to avoid sunset shifting) is gone and we are daytime
 		endtime = endtime + 24*60*60 -- add 24h at endtime after the night is gone
 		start_simu = fibaro:getValue(1, "sunsetHour"); -- recalculate for next day
-		ExtraDebug ("Added One Day to Endtime: " .. endtime);
+		ExtraDebug ("wait_for_tomorrow = 1 Added One Day to Endtime: " .. endtime);
 		ExtraDebug ("Recalculated Simulation StartHour (Sunset): " .. start_simu); 	
 	end 
 	--ExtraDebug ("debug info: Recalculated planed EndTime " ..endtime) 
@@ -168,20 +166,14 @@ end
 -- Simulate Presence Main 
 function SimulatorPresenceEngine:Launch() 
 	-- pushMessage("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute ) 
-    pushMessage("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute.." + random of "..rndmaxendtime)
+    pushMessage("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute.." + random of "..rndmaxendtime.." min")
 	-- ExtraDebug("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute );
-    ExtraDebug("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute.." + random of "..rndmaxendtime);	
+    StandardDebug("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute.." + random of "..rndmaxendtime.." min");	
 	if ID_devices_lights_always_on[1] ~= nil then SimulatorPresenceEngine:TurnOn(ID_devices_lights_always_on); end
 	--rndmaxendtime = tonumber(rndmaxendtime) + 1
-  if rndmaxendtime ~= 0 then   -- add random minutes to end hour 
-  		endtime2 = endtime + math.random(rndmaxendtime)
-    else
-    	endtime2 = endtime
-  end
-    	ExtraDebug("defined endtime : ".. endtime .. " new endtime (with random): " .. endtime2)
-    while ((os.time() <= endtime2) and (simu == "1")) or ((manualOveride == "1")) do 
-		-- original code: while ((os.time() <= endtime) and (simu == "1")) or ((os.time() <= endtime) and (simu == "1") and (manualOveride == "1")) do 
-		-- if time == endtime then StandardDebug("time and endtime same value -> end") end 
+
+    	ExtraDebug("Defined endtime : ".. endtime .. ". New endtime (with random): " .. rndmaxendtime)
+    while ((os.time() <= endtime) and (simu == "1")) or ((manualOveride == "1")) do 
 		local random_light = tonumber(ID_devices_lights[math.random(numbers_lights)]) --choose a random light in the list 
 		local lightstatus = fibaro:getValue(random_light, 'value') --get the value of the random light in the list 
 		-- turn on the light if off or turn off if on 
@@ -190,7 +182,7 @@ function SimulatorPresenceEngine:Launch()
 		lightstatus = fibaro:getValue(random_light, 'value') --get the value of the random light after his update 
 		StandardDebug('light ID:'.. fibaro:getName(random_light) ..' status:'..lightstatus);
 		local sleeptime = math.random(rndmaxtime*60000) --random sleep 
-		StandardDebug("entering loop of " .. round(sleeptime/60000,2) .. " minutes");
+		StandardDebug("Entering loop of " .. round(sleeptime/60000,2) .. " minutes");
 		-- This modification allows to exit the scene if the Simu_presence global var changes to 0 during the random  sleep
 			local counterexitsimu = 200
 				while (counterexitsimu > 0) do
@@ -203,7 +195,7 @@ function SimulatorPresenceEngine:Launch()
 					end
 				fibaro:sleep(sleeptime/200);
 				end
-			ExtraDebug("exiting loop of " .. round(sleeptime/60000,2) .. " minutes");
+			ExtraDebug("Exiting loop of "..round(sleeptime/60000,2).." minutes");
 		local sleeptimemin = math.abs(sleeptime/60000) 
 		--StandardDebug('sleeptime:'..sleeptimemin);
 		simu = fibaro:getGlobal("Simu_presence"); --verify the global value, if the virtual device is deactivated, the scene stops. 
@@ -228,8 +220,17 @@ end
 -- Switch off devices in the list 
 function SimulatorPresenceEngine:TurnOff(group,group2) 
 	Debug("red","TurnOff All Simulation lights!");
-	local name, id2; 
+	local name, id2, sleep_between_TurnOff ; 
 	local ID_devices_group = group; 
+	if rndmaxendtime ~= 0 and simu == "1" then   -- if simu = 1 then slow turn off, else turn off all immediately
+	--if rndmaxendtime ~= 0 then
+  		sleep_between_TurnOff = (math.random(rndmaxendtime)/numbers_lights)*60000;
+		ExtraDebug("Calculated sleeping between each turn off: "..round(sleep_between_TurnOff/60000,2).." min");
+		--endtime2 = endtime + math.random(rndmaxendtime)
+    else
+    	sleep_between_TurnOff = 0;
+		ExtraDebug("No sleeping between turn off");
+    end
 	for i=1, #ID_devices_group do 
 		id2 = tonumber(ID_devices_group[i]); 
 		fibaro:call(id2, "turnOff"); 
@@ -237,7 +238,9 @@ function SimulatorPresenceEngine:TurnOff(group,group2)
 		if (name == nil or name == string.char(0)) then 
 			name = "Unknown" 	
 		end 
-		StandardDebug("Device: " .. name .. " Off "); 
+		StandardDebug("Device: "..name.." Off ");
+		StandardDebug("Sleeping of "..round(sleep_between_TurnOff/60000,2).." minutes before next TurnOff");
+		fibaro:sleep(sleep_between_TurnOff);
 	end 
 	Debug("red","TurnOff All Always_On lights!");
 	local ID_devices_group = group2; 
@@ -248,7 +251,7 @@ function SimulatorPresenceEngine:TurnOff(group,group2)
 			if (name == nil or name == string.char(0)) then 
 				name = "Unknown" 	
 			end 
-		StandardDebug("Device: " .. name .. " Off "); 
+		StandardDebug("Device: "..name.." Off "); 
 	end 
 	if ID_On_After_Simu ~= 0 and simu == "1" then
 		fibaro:call(ID_On_After_Simu, "turnOn");
@@ -256,7 +259,8 @@ function SimulatorPresenceEngine:TurnOff(group,group2)
 			if (name == nil or name == string.char(0)) then 
 				name = "Unknown" 	
 			end 
-	  Debug("red","Turned On light ID_On_After_Simu: " .. name);
+		Debug("red","Turned On light ID_On_After_Simu:");
+		Debug("white", name);
 	end
 	if ID_On_When_Simu_Deactivated ~= 0 and simu == "0" then
 		fibaro:call(ID_On_When_Simu_Deactivated, "turnOn");
@@ -264,7 +268,8 @@ function SimulatorPresenceEngine:TurnOff(group,group2)
 			if (name == nil or name == string.char(0)) then 
 				name = "Unknown" 	
 			end 
-      Debug("red","Turned On light ID_On_When_Simu_Deactivated: " .. name);
+		Debug("red","Turned On light ID_On_When_Simu_Deactivated:");
+		Debug("white", name);
 	end
 end 
 -- Switch on devices in the list 
@@ -279,7 +284,7 @@ function SimulatorPresenceEngine:TurnOn(group)
 		if (name == nil or name == string.char(0)) then 
 			name = "Unknown" 	
 		end 
-		StandardDebug("Device: " .. name .. " On "); 
+		StandardDebug("Device: "..name.." Turned On "); 
 	end
 	Debug("red","Now randomizing other lights...");
 end 
@@ -296,7 +301,7 @@ if (simu == "0") then -- check before the while loop below... remove ?.
 end
 
 pushMessage("Scheduled Simulation starting time: " .. start_simu);
-ExtraDebug("Today's sunset is at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute);
+StandardDebug("Today's sunset is at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute);
 
 --while (simu=="1" or simu=="0" ) do
 while true do -- boucle infinie
