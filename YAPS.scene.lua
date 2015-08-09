@@ -6,40 +6,33 @@ Simu_presence
 --]] 
 
 ---------------------------------
--- YAPS Presence Simulator V3.0.0
+-- YAPS Presence Simulator V3.0.1
 -- SebcBien
 -- August 2015
 ---------------------------------
+--V3.0.1
+-- modified end time notification impacted by random and smooth TurnOff (endtime impact)
 --V3.0.0
 -- added smooth cut off of lights at ending time (not with deactivation)
 --V2.6.6
 -- clean up debug messages
 -- added free sms notifications
 -- second fix to looping days bug
---V2.6.5
+--V2.6.0 to V2.6.5 
 -- Fixed bug when rndmaxendtime = 0
 -- Probably fixed endtime bug calculation when looping for days du to days are shorter now than the previous day
 -- Fixed bug not turning on ID_On_After_Simu when exiting simulation
---V2.6.4
 -- added random end time + small stability changes and cleaning
---V2.6.3
 -- Added array of lights to turn on after simu, ONLY if Simu_presence = 1 (normal ending, not ended by setting Simu_presence to 0)
---V2.6.2
 -- Added the possibility to not have an always on lamp
---V2.6.1
 -- Added naming of devices in the debug during simulation
---V2.6.0
 -- Added the possibility to select always on light during simulation
---V2.5.0
+--V2.2.0 to 2.5.0
 -- fixed simulation starting if restarted between endtime & midnight
---v2.4.1
 -- fixed big bug simulator restarting after end time
---V2.3.1
 -- small notification and debug changes
---V2.3
 -- Rewriting the engine
 -- now relaunch automatically the next day, even if Simu_presence has not changed
---V2.2
 -- Added Manual Stop variable
 -- added list of mobiles
 
@@ -90,7 +83,7 @@ local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: sim
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset
 local endtime;
 local wait_for_tomorrow = 1;
-local NotifLoop = 30;
+local NotifLoop = 0;
 local numbers_lights = #ID_devices_lights; -- numbers of light devices listed above 
 local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the simulation is forced
 
@@ -300,13 +293,12 @@ if (simu == "0") then -- check before the while loop below... remove ?.
 	fibaro:abort(); 
 end
 
-pushMessage("Scheduled Simulation starting time: " .. start_simu);
-StandardDebug("Today's sunset is at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute);
+--pushMessage("Scheduled Simulation starting time: " .. start_simu);
+--StandardDebug("Today's sunset is at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute);
 
---while (simu=="1" or simu=="0" ) do
-while true do -- boucle infinie
+while true do -- Infinie loop of actions checking, hours calculations, notifications
 	SimulatorPresenceEngine:EndTimeCalc(); 
-	-- local start_simu = "00:01"  -- uncomment this line when testing to force a start hour (only for the first loop)
+	-- local start_simu = "00:01"  -- un-comment this line when testing to force a start hour (only for the first loop)
 
 	if (os.date("%H:%M") >= start_simu) then -- define if nighttime (sunset = 1)
 		sunset = 1 
@@ -316,39 +308,40 @@ while true do -- boucle infinie
 	
 	if (simu == "1") then 
 		if sunset == 1 and (os.time() <= endtime) then 
-			Debug("grey", "It's sunset time -> Simulation ON");
+			Debug("blue", "It's sunset time -> Simulation ON");
 			SimulatorPresenceEngine:Launch();
 			SimulatorPresenceEngine:EndSimulation();
 		end 
 		if manualOveride == "1" then 
-			Debug("grey", "Manual Override Activated -> Simulation ON");
+			Debug("blue", "Manual Override Activated -> Simulation ON");
 			SimulatorPresenceEngine:Launch();
 			SimulatorPresenceEngine:EndSimulation();
 		end
-			--fibaro:debug("sunset: "..sunset .. "endtime: " .. endtime .. "ostime: " .. os.time());
-		if manualOveride == "0" and sunset == 0 and NotifLoop == 30 then 
-			Debug("grey", "Waiting for next Sunset: " .. start_simu .. " -> Simulation OFF."); 
+			--fibaro:debug("sunset: "..sunset .. " - endtime: " .. endtime .. " - ostime: " .. os.time());
+		if manualOveride == "0" and sunset == 0 and NotifLoop == 0 then 
+			Debug("yellow", "Waiting for next Sunset at "..start_simu.." - End of Simulation at "..stop_hour..":"..stop_minute);
 		end
 	end
 	
-	if sunset == 1 and (os.time() >= endtime) and (os.time() <= (endtime + 60)) then 
-		Debug("grey","Simulation ended for this night.");
+	if sunset == 1 and (os.time() >= endtime) and (os.time() <= (endtime + (sleep_between_TurnOff*numbers_lights) +	60)) then 
+		Debug("blue","Simulation ended (for this night)");
 	end 
 
 	if (simu == "0") then -- Condition to end simulation 
 		SimulatorPresenceEngine:ExitSimulation();
-		Debug("red","Simu = 0, Exit from scene");
+		Debug("red","Simu_presence = 0, Terminating Simulation Scene");
 		fibaro:abort(); 
 	end
 	
-	if NotifLoop <= 30 then --a waiting xx times the fibaro sleep below before checking again 
-    	if NotifLoop == 30 then NotifLoop = 0  end
-		if NotifLoop == 0 then ExtraDebug("Looping to check for changes every 4 min")  end
-		NotifLoop = NotifLoop + 1
-    end
+	if NotifLoop <= 120 then --a waiting xx times the fibaro sleep below (2 hours) before resetting counter (and notifying)
+    	if NotifLoop == 120 then NotifLoop = 0 end
+		if NotifLoop == 0 then
+			ExtraDebug("Now, checking for actions every minute. Next notify: in 2 hours");
+		end
+	end
 		
-	fibaro:sleep(4*60*1000); -- wait 4 minutes before testing again the global vars below
+	fibaro:sleep(1*60*1000); -- wait 1 minutes before testing again the global vars below
 	simu = fibaro:getGlobal("Simu_presence"); 
 	manualOveride = fibaro:getGlobal("overideSimuSunset"); 
-
+	NotifLoop = NotifLoop + 1;
 end
