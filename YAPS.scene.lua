@@ -74,11 +74,11 @@ local ID_On_When_Simu_Deactivated = id["LAMPE_HALL"]; -- ID of a light (Only One
 --------------------- USER SETTINGS END ---------------------------- 
 ----------------------ADVANCED SETTINGS----------------------------- 
 local showStandardDebugInfo = true; -- Debug shown in white 
-local showExtraDebugInfo = false; -- Debug shown in orange 
+local showExtraDebugInfo = true; -- Debug shown in orange 
 -------------------------------------------------------------------- 
 -------------------- DO NOT CHANGE CODE BELOW ---------------------- 
 --------------------------------------------------------------------
-local version = "3.0.0"; 
+local version = "3.0.1"; 
 local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: simulation is on or off 
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset
 local endtime;
