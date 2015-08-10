@@ -6,10 +6,12 @@ Simu_presence
 --]] 
 
 ---------------------------------------
-local version = "3.1.0"; 
+local version = "3.2.0"; 
 -- YAPS Presence Simulator by SebcBien
 -- August 2015
 ---------------------------------------
+--V3.2.0
+-- added sunset shifting possibility (add or remove minutes to startime
 --V3.1.0
 -- "complete" rewriting with unix times
 -- modified end time notification impacted by random and smooth TurnOff (endtime impact)
@@ -59,6 +61,7 @@ local stop_hour = "01"; -- Hour when you want simulation to stop
 local stop_minute = "15"; -- Minute of the hour you want simulation to stop 
 -- note 1: the script will not exit while waiting the random time of the last light turned on. So end time can be longer than specified end time. (even more with var rndmaxendtime)
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while simulation runs)
+local sunset_shift = -20 -- number of minutes before or after sunset to activate simulation
 local rndmaxtime = 20; -- random time of light change in minutes --> here each device is on maximum 30min 
 local rndmaxendtime = 15; -- random time to add at the stop hour+stop minute so the simulation can be more variable (0 to deactivate)
 local ID_devices_lights_always_on = {id["LAMPE_BUREAU"],id["LAMPE_COULOIR"]} -- IDs of lights who will always stay on during simulation - leave empty array if none -> {}
@@ -135,8 +138,13 @@ function SimulatorPresenceEngine:UniversalTimeCalc(converted_var, hour, min)
 	return unix_hour
 end
 
+function SimulatorPresenceEngine:ReverseUniversalTimeCalc(converted_var,hour)
+	reverse_unix = os.date("%H:%M", hour)
+	ExtraDebug("Reverse converted Unix Time: "..converted_var.." - "..hour.." To: "..reverse_unix)
+	return reverse_unix
+end
+
 function SimulatorPresenceEngine:EndTimeCalc() 
-	--local start = os.date("%H:%M")
 	local hour,min
     ExtraDebug ("Current Unix Time: "..os.time()) 
 	endtime = SimulatorPresenceEngine:UniversalTimeCalc("Original planed Endtime", stop_hour, stop_minute); -- generate endtime (changes at midnight) will not change during simulation, only when ended
@@ -145,7 +153,9 @@ function SimulatorPresenceEngine:EndTimeCalc()
 	Sunset_unix_hour = fibaro:getValue(1,'sunsetHour');
 	hour = string.sub(Sunset_unix_hour, 1 , 2);
 	min = string.sub(Sunset_unix_hour,4);
-	Sunset_unix_hour = SimulatorPresenceEngine:UniversalTimeCalc("Sunset", hour, min);
+	Sunset_unix_hour = (SimulatorPresenceEngine:UniversalTimeCalc("Sunset", hour, min))+sunset_shift*60;
+	
+	
 		--[[
 	if (os.time() < endtime) and (os.time() > Midnight) and first_launch == true then -- si calcul effectué entre minuit et endtime lors du premier lancement, alors reculer sunset de 24h
 		Sunset_unix_hour = Sunset_unix_hour - 24*60*60;
@@ -207,13 +217,12 @@ end
 -- Simulate Presence Main 
 function SimulatorPresenceEngine:Launch() 
 	-- pushMessage("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute ) 
-    pushMessage("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute.." + "..(round(sleep_between_TurnOff,2)*numbers_lights).." min")
+    pushMessage("Lights simulation started, will stop at: "..SimulatorPresenceEngine:ReverseUniversalTimeCalc("endtime", endtime).." + random of "..rndmaxendtime.."min = "..SimulatorPresenceEngine:ReverseUniversalTimeCalc("endtime_with_rndmaxendtime", endtime_with_rndmaxendtime));
 	-- ExtraDebug("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute );
-    StandardDebug("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute.." + "..(round(sleep_between_TurnOff,2)*numbers_lights).." min");	
+    StandardDebug("Lights simulation started, will stop at: "..SimulatorPresenceEngine:ReverseUniversalTimeCalc("endtime", endtime).." + random of "..rndmaxendtime.."min = "..SimulatorPresenceEngine:ReverseUniversalTimeCalc("endtime_with_rndmaxendtime", endtime_with_rndmaxendtime));	
 	if ID_devices_lights_always_on[1] ~= nil then SimulatorPresenceEngine:TurnOn(ID_devices_lights_always_on); end
 	--rndmaxendtime = tonumber(rndmaxendtime) + 1
-
-    	ExtraDebug("Defined endtime : ".. endtime .. ". New endtime (with random): " .. rndmaxendtime)
+    --ExtraDebug("Defined endtime : ".. endtime .. ". New endtime (with random): " .. rndmaxendtime)
     while ((os.time() <= endtime) and (simu == "1")) or ((manualOveride == "1")) do 
 		local random_light = tonumber(ID_devices_lights[math.random(numbers_lights)]) --choose a random light in the list 
 		local lightstatus = fibaro:getValue(random_light, 'value') --get the value of the random light in the list 
@@ -248,8 +257,8 @@ function SimulatorPresenceEngine:EndSimulation()
 	if ID_devices_lights_always_on[1] ~= nil then SimulatorPresenceEngine:TurnOff(ID_devices_lights,ID_devices_lights_always_on); end
 	Debug("red","Simulation is deactivated");
 	if (simu == "1") then
-		Debug("grey", "Presence Simulator will Restart tomorrow around ".. fibaro:getValue(1, "sunsetHour"));
-		pushMessage("Presence Simulator will Restart tomorrow around ".. fibaro:getValue(1, "sunsetHour"));
+		Debug("grey", "Presence Simulator will Restart tomorrow around ".. SimulatorPresenceEngine:ReverseUniversalTimeCalc("Sunset unix time", Sunset_unix_hour).." ("..Sunset_unix_hour..")");
+		pushMessage("Presence Simulator will Restart tomorrow around ".. SimulatorPresenceEngine:ReverseUniversalTimeCalc("Sunset unix time", Sunset_unix_hour));
 		--wait_for_tomorrow = 1 -- will make EndTimeCalc add 24h to endtime during daytime
 	end
 end
@@ -345,8 +354,10 @@ Debug( "green", "--------------------------------");
 	fibaro:abort(); 
 end
 --]]
-pushMessage("Scheduled Simulation starting time: " .. start_simu);
-StandardDebug("Today's sunset is at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute.." (+ random of "..rndmaxendtime.." min)");
+	SimulatorPresenceEngine:EndTimeCalc(); 
+	pushMessage("Scheduled Simulation starting time: "..SimulatorPresenceEngine:ReverseUniversalTimeCalc("Sunset unix time", Sunset_unix_hour));
+	StandardDebug("Sunset is at "..fibaro:getValue(1, "sunsetHour").." + Sunset Shift of "..sunset_shift.."min = Start Time at "..SimulatorPresenceEngine:ReverseUniversalTimeCalc("Sunset unix time", Sunset_unix_hour));
+	StandardDebug("End of Simulation: "..SimulatorPresenceEngine:ReverseUniversalTimeCalc("End Simulation", endtime).." + random of "..rndmaxendtime.."min = "..SimulatorPresenceEngine:ReverseUniversalTimeCalc("End Simulation", endtime_with_rndmaxendtime));
 
 while true do -- Infinie loop of actions checking, hours calculations, notifications
 	SimulatorPresenceEngine:EndTimeCalc(); 
@@ -371,7 +382,7 @@ while true do -- Infinie loop of actions checking, hours calculations, notificat
 		end
 			--fibaro:debug("sunset: "..sunset .. " - endtime: " .. endtime .. " - ostime: " .. os.time());
 		if manualOveride == "0" and sunset == 0 and NotifLoop == 0 then 
-			Debug("yellow", "Waiting for next Sunset at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute.." (+ random of "..rndmaxendtime.." min)");
+			Debug("yellow", "Waiting for next Sunset at "..Sunset_unix_hour.." - End of Simulation at "..stop_hour..":"..stop_minute.." (+ random of "..rndmaxendtime.." min)");
 		end
 	end
 	
