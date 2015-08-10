@@ -5,15 +5,16 @@
 Simu_presence 
 --]] 
 
----------------------------------
--- YAPS Presence Simulator V3.0.1
--- SebcBien
+---------------------------------------
+local version = "3.1.0"; 
+-- YAPS Presence Simulator by SebcBien
 -- August 2015
----------------------------------
---V3.0.1
+---------------------------------------
+--V3.1.0
+-- "complete" rewriting with unix times
 -- modified end time notification impacted by random and smooth TurnOff (endtime impact)
---V3.0.0
--- added smooth cut off of lights at ending time (not with deactivation)
+-- exit is now exactly at endtime
+-- added smooth cut off of lights at ending time (function not triggered with deactivation)
 --V2.6.6
 -- clean up debug messages
 -- added free sms notifications
@@ -78,11 +79,10 @@ local showExtraDebugInfo = true; -- Debug shown in orange
 -------------------------------------------------------------------- 
 -------------------- DO NOT CHANGE CODE BELOW ---------------------- 
 --------------------------------------------------------------------
-local version = "3.0.1"; 
 local simu = fibaro:getGlobal("Simu_presence"); --value of the global value: simulation is on or off 
 local start_simu = fibaro:getValue(1, "sunsetHour"); --Start simulation when sunset
-local endtime,Sunrise_Universal_Hour,Sunset_Universal_Hour,converted_var;
-local wait_for_tomorrow = 1;
+local endtime,Sunrise_unix_hour,Sunset_unix_hour,converted_var,Midnight,endtime_with_rndmaxendtime,sleep_between_TurnOff;
+local first_launch = true;
 local NotifLoop = 0;
 local numbers_lights = #ID_devices_lights; -- numbers of light devices listed above 
 local manualOveride = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the simulation is forced
@@ -110,7 +110,7 @@ function round(num, idp)
   local mult = 10^(idp or 0)
   return math.floor(num * mult + 0.5) / mult
 end
--- Push message to mobile 
+
 function pushMessage(sendPush) 
 	if (activatePush) then 
     	for i=1, #ID_Smartphones do 
@@ -130,38 +130,53 @@ function SimulatorPresenceEngine:UniversalTimeCalc(converted_var, hour, min)
 	local year = date.year ;
 	local month = date.month ;
 	local day = date.day ;
-	universal_hour = os.time{year=year, month=month, day=day, hour=hour, min=min, sec=sec};
-	ExtraDebug("converted "..converted_var..": "..hour..":"..min.." to universal: "..universal_hour)
-	return universal_hour
+	unix_hour = os.time{year=year, month=month, day=day, hour=hour, min=min, sec=sec};
+	ExtraDebug("converted "..converted_var..": "..hour..":"..min.." (Universal: "..unix_hour..")")
+	return unix_hour
 end
 
 function SimulatorPresenceEngine:EndTimeCalc() 
-	local start = os.date("%H:%M")
+	--local start = os.date("%H:%M")
 	local hour,min
-	endtime = SimulatorPresenceEngine:UniversalTimeCalc("Original planed Endtime", stop_hour, stop_minute) -- generate endtime (changes at midnight) will not change during simulation, only when ended
-	--start_simu = fibaro:getValue(1, "sunsetHour"); -- Calculate for next day (changes at midnight)
+    ExtraDebug ("Current Unix Time: "..os.time()) 
+	endtime = SimulatorPresenceEngine:UniversalTimeCalc("Original planed Endtime", stop_hour, stop_minute); -- generate endtime (changes at midnight) will not change during simulation, only when ended
+	Midnight = SimulatorPresenceEngine:UniversalTimeCalc("Midnight", 00, 00);
 	
+	Sunset_unix_hour = fibaro:getValue(1,'sunsetHour');
+	hour = string.sub(Sunset_unix_hour, 1 , 2);
+	min = string.sub(Sunset_unix_hour,4);
+	Sunset_unix_hour = SimulatorPresenceEngine:UniversalTimeCalc("Sunset", hour, min);
+		--[[
+	if (os.time() < endtime) and (os.time() > Midnight) and first_launch == true then -- si calcul effectué entre minuit et endtime lors du premier lancement, alors reculer sunset de 24h
+		Sunset_unix_hour = Sunset_unix_hour - 24*60*60;
+		ExtraDebug ("stop hour <= 12, removed 24H to Sunset_unix_hour (endtime is ending after midnignt)");
+		ExtraDebug ("New SunsetTime: "..Sunset_unix_hour);
+	end 
+	first_launch = false
+	
+				Sunrise_unix_hour = fibaro:getValue(1,'sunriseHour')
+				hour = string.sub(Sunrise_unix_hour, 1 , 2)
+				min = string.sub(Sunrise_unix_hour,4)
+				Sunrise_unix_hour = SimulatorPresenceEngine:UniversalTimeCalc("Sunrise", hour, min)
+			--]]
 	-- if stop hour is between 00 and 12h then add 24 hours to endtime
 	-- To do: check if simu is launched between midnight and stop hour -> will be 24h later (simu will run trough the day)
-	if tonumber(stop_hour) <= 12 then
+	if tonumber(stop_hour) <= 12 and (os.time() >= endtime) then
 		endtime = endtime + 24*60*60 
 		ExtraDebug ("stop hour <= 12, Added 24H to Endtime (endtime is ending after midnignt)");
 		ExtraDebug ("New EndTime: "..endtime);
 	end 
 	
-	Sunrise_Universal_Hour = fibaro:getValue(1,'sunriseHour')
-	hour = string.sub (Sunrise_Universal_Hour, 1 , 2)
-	min = string.sub(Sunrise_Universal_Hour,4)
-	Sunrise_Universal_Hour = SimulatorPresenceEngine:UniversalTimeCalc("Sunrise", hour, min)
-	--fibaro:debug("sunrise universal function "..hour..":"..min.." "..Sunrise_Universal_Hour)
-	
-	Sunset_Universal_Hour = fibaro:getValue(1,'sunsetHour')
-	hour = string.sub (Sunset_Universal_Hour, 1 , 2)
-	min = string.sub(Sunset_Universal_Hour,4)
-	Sunset_Universal_Hour = SimulatorPresenceEngine:UniversalTimeCalc("Sunset", hour, min)
-	--fibaro:debug("sunset universal function "..hour..":"..min.." "..Sunset_Universal_Hour)
-	
-	
+	if rndmaxendtime ~= 0 then   -- if simu = 1 then slow turn off, else turn off all immediately
+  		sleep_between_TurnOff = (math.random(rndmaxendtime)/numbers_lights);
+		ExtraDebug("Calculated sleeping between each turn off: "..round(sleep_between_TurnOff,2).." min");
+		--endtime2 = endtime + math.random(rndmaxendtime)
+    else
+    	sleep_between_TurnOff = 0;
+		ExtraDebug("No sleeping between turn off");
+    end
+	endtime_with_rndmaxendtime = endtime + (sleep_between_TurnOff*numbers_lights*60)
+	ExtraDebug("endtime_with_rndmaxendtime: "..endtime_with_rndmaxendtime);
 	--[[local currentHour = os.date("*t");
 	local sunrise = tonumber(string.sub (fibaro:getValue(1,'sunriseHour'), 1 , 2) ) * 60 + tonumber(string.sub(fibaro:getValue(1,'sunriseHour'), 4) )
 	local sunset = tonumber(string.sub (fibaro:getValue(1,'sunsetHour'), 1 , 2) ) * 60 + tonumber(string.sub(fibaro:getValue(1,'sunsetHour'), 4) )
@@ -192,9 +207,9 @@ end
 -- Simulate Presence Main 
 function SimulatorPresenceEngine:Launch() 
 	-- pushMessage("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute ) 
-    pushMessage("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute.." + random of "..rndmaxendtime.." min")
+    pushMessage("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute.." + "..(round(sleep_between_TurnOff,2)*numbers_lights).." min")
 	-- ExtraDebug("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute );
-    StandardDebug("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute.." + random of "..rndmaxendtime.." min");	
+    StandardDebug("Lights simulation started, will stop at: "..stop_hour..":"..stop_minute.." + "..(round(sleep_between_TurnOff,2)*numbers_lights).." min");	
 	if ID_devices_lights_always_on[1] ~= nil then SimulatorPresenceEngine:TurnOn(ID_devices_lights_always_on); end
 	--rndmaxendtime = tonumber(rndmaxendtime) + 1
 
@@ -211,7 +226,7 @@ function SimulatorPresenceEngine:Launch()
 		StandardDebug("Entering loop of " .. round(sleeptime/60000,2) .. " minutes");
 		-- This modification allows to exit the scene if the Simu_presence global var changes to 0 during the random  sleep
 			local counterexitsimu = 200
-				while (counterexitsimu > 0) do
+				while (counterexitsimu > 0) and (os.time() <= endtime) do
 					counterexitsimu = counterexitsimu - 1;
 					test_presence_state = fibaro:getGlobal("Simu_presence");
 					simu = tonumber(test_presence_state); --verify the global value, if the virtual device is deactivated, the scene stops. 
@@ -246,8 +261,11 @@ end
 -- Switch off devices in the list 
 function SimulatorPresenceEngine:TurnOff(group,group2) 
 	Debug("red","TurnOff All Simulation lights!");
-	local name, id2, sleep_between_TurnOff ; 
+	local name, id2; 
 	local ID_devices_group = group; 
+	
+	
+	--[[
 	if rndmaxendtime ~= 0 and simu == "1" then   -- if simu = 1 then slow turn off, else turn off all immediately
 	--if rndmaxendtime ~= 0 then
   		sleep_between_TurnOff = (math.random(rndmaxendtime)/numbers_lights)*60000;
@@ -257,6 +275,8 @@ function SimulatorPresenceEngine:TurnOff(group,group2)
     	sleep_between_TurnOff = 0;
 		ExtraDebug("No sleeping between turn off");
     end
+	--]]
+		
 	for i=1, #ID_devices_group do 
 		id2 = tonumber(ID_devices_group[i]); 
 		fibaro:call(id2, "turnOff"); 
@@ -265,8 +285,8 @@ function SimulatorPresenceEngine:TurnOff(group,group2)
 			name = "Unknown" 	
 		end 
 		StandardDebug("Device: "..name.." Off ");
-		StandardDebug("Sleeping of "..round(sleep_between_TurnOff/60000,2).." minutes before next TurnOff");
-		fibaro:sleep(sleep_between_TurnOff);
+		StandardDebug("Sleeping of "..round(sleep_between_TurnOff,2).." minutes before next TurnOff");
+		fibaro:sleep(sleep_between_TurnOff*60000);
 	end 
 	Debug("red","TurnOff All Always_On lights!");
 	local ID_devices_group = group2; 
@@ -319,20 +339,20 @@ Debug("green", "Presence Simulator | v" .. version );
 Debug( "green", "--------------------------------");
 
 ------------------------ Main Loop ----------------------------------
-if (simu == "0") then -- check before the while loop below... remove ?. 
+--[[if (simu == "0") then -- check before the while loop below... remove ?. 
 	Debug("red","Not starting Simulation (Simu_presence = 0)");
 	SimulatorPresenceEngine:ExitSimulation();
 	fibaro:abort(); 
 end
-
---pushMessage("Scheduled Simulation starting time: " .. start_simu);
---StandardDebug("Today's sunset is at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute);
+--]]
+pushMessage("Scheduled Simulation starting time: " .. start_simu);
+StandardDebug("Today's sunset is at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute.." (+ random of "..rndmaxendtime.." min)");
 
 while true do -- Infinie loop of actions checking, hours calculations, notifications
 	SimulatorPresenceEngine:EndTimeCalc(); 
-	-- local start_simu = "00:01"  -- un-comment this line when testing to force a start hour (only for the first loop)
+	-- local Sunset_unix_hour = Midnight  -- un-comment this line when testing to force a start hour (only for the first loop)
 
-	if os.time() >= Sunset_Universal_Hour then -- define if nighttime (sunset = 1)
+	if os.time() >= Sunset_unix_hour then -- define if nighttime (sunset = 1)
 		sunset = 1 
 	else 
 		sunset = 0 
@@ -340,23 +360,23 @@ while true do -- Infinie loop of actions checking, hours calculations, notificat
 	
 	if (simu == "1") then 
 		if sunset == 1 and (os.time() <= endtime) then 
-			Debug("blue", "It's sunset time -> Simulation ON");
+			Debug("yellow", "It's sunset time -> Simulation ON");
 			SimulatorPresenceEngine:Launch();
 			SimulatorPresenceEngine:EndSimulation();
 		end 
 		if manualOveride == "1" then 
-			Debug("blue", "Manual Override Activated -> Simulation ON");
+			Debug("yellow", "Manual Override Activated -> Simulation ON");
 			SimulatorPresenceEngine:Launch();
 			SimulatorPresenceEngine:EndSimulation();
 		end
 			--fibaro:debug("sunset: "..sunset .. " - endtime: " .. endtime .. " - ostime: " .. os.time());
 		if manualOveride == "0" and sunset == 0 and NotifLoop == 0 then 
-			Debug("yellow", "Waiting for next Sunset at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute);
+			Debug("yellow", "Waiting for next Sunset at "..fibaro:getValue(1, "sunsetHour").." - End of Simulation at "..stop_hour..":"..stop_minute.." (+ random of "..rndmaxendtime.." min)");
 		end
 	end
 	
-	if sunset == 1 and (os.time() >= endtime) and (os.time() <= (endtime + (sleep_between_TurnOff*numbers_lights) +	60)) then 
-		Debug("blue","Simulation ended (for this night)");
+	if sunset == 1 and (os.time() >= endtime_with_rndmaxendtime) and (os.time() <= (endtime_with_rndmaxendtime + 60)) then
+		Debug("yellow","Simulation ended (for this night)");
 	end 
 
 	if (simu == "0") then -- Condition to end simulation 
