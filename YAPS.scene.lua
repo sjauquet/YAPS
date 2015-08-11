@@ -6,10 +6,12 @@ Simu_presence
 --]] 
 
 ---------------------------------------
-local version = "3.2.3"; 
+local version = "3.3.0"; 
 -- YAPS Presence Simulator by SebcBien
 -- August 2015
 ---------------------------------------
+--V3.3.0
+-- Fixed Override bug (no sleep time between lights)
 --V3.2.3
 -- added sunset shifting possibility (add or remove minutes to startime
 -- added time stamp to push messages
@@ -61,7 +63,7 @@ local id = {
     PHONE_GG			= 1327
 	}
   
-local stop_hour = "01"; -- Hour when you want simulation to stop 
+local stop_hour = "00"; -- Hour when you want simulation to stop 
 local stop_minute = "15"; -- Minute of the hour you want simulation to stop 
 -- note 1: the script will not exit while waiting the random time of the last light turned on. So end time can be longer than specified end time. (even more with var rndmaxendtime)
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while simulation runs)
@@ -227,13 +229,16 @@ function SimulatorPresenceEngine:Launch()
 		StandardDebug("Entering loop of " .. round(sleeptime/60000,2) .. " minutes");
 		-- Allows to exit the scene if the Simu_presence global var changes to 0 during the random  sleep
 			local counterexitsimu = 200
-				while (counterexitsimu > 0) and (os.time() <= endtime) do
+				while (counterexitsimu > 0) and ((os.time() <= endtime) or manualOveride == "1") do
 					counterexitsimu = counterexitsimu - 1;
 					test_presence_state = fibaro:getGlobal("Simu_presence");
 					simu = tonumber(test_presence_state); --verify the global value, if the virtual device is deactivated, the loop stops. 
-					--fibaro:debug("simu var state : " .. simu);
+					--fibaro:debug("simu var state : " .. simu.." override var state : " .. manualOveride);
 					if simu == 0 then
+						manualOveride = fibaro:getGlobalValue("overideSimuSunset");
+						if simu == 0 or manualOveride == "0" then
 						counterexitsimu = 0
+						end
 					end
 				fibaro:sleep(sleeptime/200);
 				end
