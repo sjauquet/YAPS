@@ -6,7 +6,7 @@ Simu_presence
 --]] 
 
 ---------------------------------------
-local version = "3.5.0"; 
+local version = "3.5.1"; 
 -- YAPS Presence Simulation by SebcBien
 -- August 2015
 ---------------------------------------
