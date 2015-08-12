@@ -10,8 +10,9 @@ local version = "3.5.0";
 -- YAPS Presence Simulation by SebcBien
 -- August 2015
 ---------------------------------------
---V3.5.0
+--V3.5.1
 -- Fixed launch between midnight and endtime (if endtime is after midnight)
+-- clean up code midnight-endtime
 --V3.3.2
 -- renamed all variables for more readability
 --V3.3.0
@@ -189,30 +190,6 @@ function YAPS_Engine:EndTimeCalc()
 		ExtraDebug ("New SunsetTime: "..Sunset_unix_hour);
 	end 
 	Is_first_launch = false
-			--[[
-				and (os.time() > Midnight)
-				Sunrise_unix_hour = fibaro:getValue(1,'sunriseHour')
-				hour = string.sub(Sunrise_unix_hour, 1 , 2)
-				min = string.sub(Sunrise_unix_hour,4)
-				Sunrise_unix_hour = YAPS_Engine:UnixTimeCalc("Sunrise", hour, min)
-			--]]
-	-----------------------------------------------------------------------------------------------------		
-	-- At first launch only, add 24h to End_simulation_time if End_simulation_time is after midnight and in the past
-	--if ((wait_for_tomorrow == 0) and (End_simulation_time < os.time())) then -- if End_simulation_time + Random_max_TurnOff_duration (+5 min to avoid sunset shifting) is gone and it's the first launch of Simulation
-		--End_simulation_time = End_simulation_time + 24*60*60 -- add 24h at End_simulation_time after the night is gone
-		--Start_simulation_time = fibaro:getValue(1, "sunsetHour"); -- recalculate for next day (changes at midnight)
-		--ExtraDebug ("wait_for_tomorrow = 0 Added 24H to End_simulation_time (first start ending after midnignt)");
-		--ExtraDebug ("Recalculated Simulation StartHour (Sunset): " .. Start_simulation_time); 		
-		--wait_for_tomorrow = 1	
-	--end
-	--	adds 24h to End_simulation_time after the end of Simulation (between sunrise and sunset)
-	--if (wait_for_tomorrow == 1 and (End_simulation_time < os.time()) and ((now >= sunrise) and (now <= sunset))) then -- if it looping days and End_simulation_time is gone and we are daytime, then add 
-		--End_simulation_time = End_simulation_time + 24*60*60 -- add 24h at End_simulation_time after the night is gone
-		--Start_simulation_time = fibaro:getValue(1, "sunsetHour"); -- recalculate for next day
-		--ExtraDebug ("wait_for_tomorrow = 1 Added One Day to End_simulation_time: " .. End_simulation_time);
-		--ExtraDebug ("Recalculated Simulation StartHour (Sunset): " .. Start_simulation_time); 	
-	--end 
-	--ExtraDebug ("debug info: Recalculated planed End_simulation_time " ..End_simulation_time) 
 end 
 -- Presence Simulation actions Main loop
 function YAPS_Engine:Launch() 
