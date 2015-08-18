@@ -68,16 +68,16 @@ local id = {
     PHONE_GG			= 1327
 	}
   
-local Stop_hour = "00"; -- Hour when you want Simulation to stop 
-local Stop_minute = "15"; -- Minute of the hour you want Simulation to stop 
+local Stop_hour = "01"; -- Hour when you want Simulation to stop 
+local Stop_minute = "30"; -- Minute of the hour you want Simulation to stop 
 -- note 1: the script will not exit while waiting the random time of the last light turned on. So end time can be longer than specified end time. (even more with var Random_max_TurnOff_duration)
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while Simulation runs)
-local Sunset_offset = -20 -- number of minutes before or after sunset to activate Simulation
+local Sunset_offset = -15 -- number of minutes before or after sunset to activate Simulation
 local Random_max_duration = 30; -- random time of light change in minutes --> here each device is on maximum 30min 
-local Random_max_TurnOff_duration = 15; -- random time to add at the stop hour+stop minute so the Simulation can be more variable (0 to deactivate)
+local Random_max_TurnOff_duration = 25; -- random time to add at the stop hour+stop minute so the Simulation can be more variable (0 to deactivate)
 local Lights_always_on = {id["LAMPE_BUREAU"],id["LAMPE_COULOIR"]} -- IDs of lights who will always stay on during Simulation - leave empty array if none -> {}
---local Random_lights = {id["LAMPE_SDB"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in Simulation 
-local Random_lights = {id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- Reduced set for test purposes
+local Random_lights = {id["LAMPE_SDB"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in Simulation 
+--local Random_lights = {id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- Reduced set for test purposes
 local Activate_Push = true; -- activate push when Simulation starts and stops 
 local Activate_FreeSms = false; -- activate push with Activate_FreeSms (Activate_Push must be true also) 
 --local Smartphones_push = {id["PHONE_SEB"],id["PHONE_GG"]}; 
