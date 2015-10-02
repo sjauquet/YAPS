@@ -6,10 +6,11 @@ Simu_presence
 --]] 
 
 ---------------------------------------
-local version = "3.5.1"; 
+local version = "3.5.2"; 
 -- YAPS Presence Simulation by SebcBien
 -- August 2015
 ---------------------------------------
+--V3.5.2 - start push sent by email
 --V3.5.1
 -- Fixed launch between midnight and endtime (if endtime is after midnight)
 -- clean up code midnight-endtime
@@ -65,6 +66,7 @@ local id = {
 	LAMPE_CH_EMILIEN	= 58,
     LAMPE_COULOIR		= 1316,
 	PHONE_SEB			= 1347,
+	ADMIN 				= 2,
     PHONE_GG			= 1327
 	}
   
@@ -122,6 +124,11 @@ end
 function round(num, idp)
   local mult = 10^(idp or 0)
   return math.floor(num * mult + 0.5) / mult
+end
+
+function Mail(mailMessage) 
+		mailMessage = os.date("%H:%M", os.time()).." "..mailMessage -- add timestamp to push message
+		fibaro:call(id["ADMIN"], "sendEmail", "Presence Simulator", mailMessage);
 end
 
 function PushMessage(sendPush) 
@@ -241,7 +248,7 @@ function YAPS_Engine:EndSimulation()
 end
 
 function YAPS_Engine:ExitSimulation()
-	PushMessage("Presence Simulation is terminated");
+	--PushMessage("Presence Simulation is terminated");
 	Debug("red","Simu_presence = 0, Aborting Simulation scene");
 	fibaro:abort(); 
 end
@@ -314,12 +321,12 @@ function YAPS_Engine:TurnOn(group)
 end 
 	
 Debug("green", "Presence Simulation | v" .. version .. " Starting up"); 
-Debug( "green", "--------------------------------------------------------------------------");
+Debug("green", "--------------------------------------------------------------------------");
 
 ------------------------ Main Loop ----------------------------------
 -- first start notifications
 YAPS_Engine:EndTimeCalc();
-PushMessage("Scheduled presence Simulation at "..YAPS_Engine:ReverseUnixTimeCalc("Sunset unix time", Sunset_unix_hour).." (Sunset: "..fibaro:getValue(1, "sunsetHour")..")");
+Mail("Scheduled presence Simulation at "..YAPS_Engine:ReverseUnixTimeCalc("Sunset unix time", Sunset_unix_hour).." (Sunset: "..fibaro:getValue(1, "sunsetHour")..")");
 Debug("green","Sunset is at "..fibaro:getValue(1, "sunsetHour").." + Sunset Shift of "..Sunset_offset.."min = Start Time at "..YAPS_Engine:ReverseUnixTimeCalc("Sunset unix time", Sunset_unix_hour));
 Debug("green","End of Simulation: "..YAPS_Engine:ReverseUnixTimeCalc("End Simulation", End_simulation_time).." + random of "..Random_max_TurnOff_duration.."min");
 Debug("green", "Checking for actions every minute.");
