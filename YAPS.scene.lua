@@ -6,10 +6,12 @@ Simu_presence
 --]] 
 
 ---------------------------------------
-local version = "3.5.2"; 
+local version = "3.6.1"; 
 -- YAPS Presence Simulation by SebcBien
 -- August 2015
 ---------------------------------------
+--V3.6.1 -- added new notifications engine (sms, freesms, push, email)
+-- fixed bug "attempt to concatenate local 'deviceID' (a nil value)"
 --V3.5.2 - start push sent by email
 --V3.5.1
 -- Fixed launch between midnight and endtime (if endtime is after midnight)
@@ -51,10 +53,10 @@ local version = "3.5.2";
 -- Added Manual Stop variable
 -- added list of mobiles
 
-if (fibaro:countScenes() > 1) then 
-	fibaro:debug("Scene already active! Aborting this new instance !!"); 
-	fibaro:abort(); 
-end 
+if (fibaro:countScenes() > 1) then
+	fibaro:debug("Scene already active! Aborting this new instance !!");
+	fibaro:abort();
+end
 --------------------- USER SETTINGS --------------------------------
 local id = {
 	LAMPE_SDB			= 16,
@@ -64,93 +66,124 @@ local id = {
 	LAMPE_HALL			= 52,
 	LAMPE_CELLIER		= 56,
 	LAMPE_CH_EMILIEN	= 58,
-    LAMPE_COULOIR		= 1316,
+	LAMPE_COULOIR		= 1316,
 	PHONE_SEB			= 1347,
 	ADMIN 				= 2,
-    PHONE_GG			= 1327
+	PHONE_GG			= 1327
 	}
-  
-local Stop_hour = "01"; -- Hour when you want Simulation to stop 
-local Stop_minute = "30"; -- Minute of the hour you want Simulation to stop 
+
+local Stop_hour = "01";					-- Hour when you want Simulation to stop 
+local Stop_minute = "30";				-- Minute of the hour you want Simulation to stop 
 -- note 1: the script will not exit while waiting the random time of the last light turned on. So end time can be longer than specified end time. (even more with var Random_max_TurnOff_duration)
 -- note 2: if the global variable changes during the same wait time as above, it will exit immediately (when back home while Simulation runs)
-local Sunset_offset = -15 -- number of minutes before or after sunset to activate Simulation
-local Random_max_duration = 30; -- random time of light change in minutes --> here each device is on maximum 30min 
-local Random_max_TurnOff_duration = 25; -- random time to add at the stop hour+stop minute so the Simulation can be more variable (0 to deactivate)
+local Sunset_offset = -15				-- number of minutes before or after sunset to activate Simulation
+local Random_max_duration = 30;			-- random time of light change in minutes --> here each device is on maximum 30min 
+local Random_max_TurnOff_duration = 25;	-- random time to add at the stop hour+stop minute so the Simulation can be more variable (0 to deactivate)
 local Lights_always_on = {id["LAMPE_BUREAU"],id["LAMPE_COULOIR"]} -- IDs of lights who will always stay on during Simulation - leave empty array if none -> {}
 local Random_lights = {id["LAMPE_SDB"],id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- IDs of lights to use in Simulation 
 --local Random_lights = {id["LAMPE_HALL"],id["LAMPE_CELLIER"],id["LAMPE_CH_AMIS"]} -- Reduced set for test purposes
-local Activate_Push = true; -- activate push when Simulation starts and stops 
-local Activate_FreeSms = false; -- activate push with Activate_FreeSms (Activate_Push must be true also) 
---local Smartphones_push = {id["PHONE_SEB"],id["PHONE_GG"]}; 
-local Smartphones_push = {id["PHONE_SEB"]}; -- list of device receiving Push
-local Lights_On_at_end_Simulation = 0; -- If next line is commented, no light will turn on after Simulation ends
+local Lights_On_at_end_Simulation = 0;	-- If next line is commented, no light will turn on after Simulation ends
 local Lights_On_at_end_Simulation = id["LAMPE_COULOIR"]; -- ID of a light (Only One) to turn on after Simulation ends (at specified Stop_hour & Stop_minute). Comment this line to turn off this feature
 local Lights_On_if_Simulation_deactivated = 0; -- If next line is commented, no light will turn on after Simulation is stopped (by putting Simu_presence to 0)
 local Lights_On_if_Simulation_deactivated = id["LAMPE_HALL"]; -- ID of a light (Only One) to turn on after Simulation is stopped (Simulation_). Comment this line to turn off this feature
+YAPS_Engine = {}; 
+	YAPS_Engine.notifications = true;					-- send notifications
+	YAPS_Engine.notificationTypes = {"push", "email"};	--notification types {"push", "email", "sms"} but they are overriden in the code
+	YAPS_Engine.Activate_FreeSms = false;				-- activate push with Activate_FreeSms (Activate_Push must be true also) 
+	YAPS_Engine.smartphoneID = {id["PHONE_SEB"]};		-- Smartphone Id to send push to. {id1, id2, id3}
+	YAPS_Engine.userID = {id["ADMIN"]};					-- User Id to send email to. {id1, id2, id3}
+	YAPS_Engine.sms = {
+		["VD_ID"] = 0,									-- Virtual Device ID
+		["VD_Button"] = "1",							-- Virtual Device Button
+		["VG_Name"] = "SMS"};							-- Global Variable Name
 --------------------- USER SETTINGS END ---------------------------- 
 ----------------------ADVANCED SETTINGS----------------------------- 
-local Show_standard_debug = true; -- Debug displayed in white 
-local Show_extra_debug = false; -- Debug displayed in orange 
+local Show_standard_debug = true;	-- Debug displayed in white 
+local Show_extra_debug = false;		-- Debug displayed in orange 
 -------------------------------------------------------------------- 
 -------------------- DO NOT CHANGE CODE BELOW ---------------------- 
 --------------------------------------------------------------------
-local Number_of_lights = #Random_lights; -- numbers of light devices listed above 
-local Simulation = fibaro:getGlobal("Simu_presence"); --value of the global value: Simulation is on or off 
-local Manual_overide = fibaro:getGlobal("overideSimuSunset"); -- if = 1 then the Simulation is forced
-local Start_simulation_time = fibaro:getValue(1, "sunsetHour"); --Start Simulation when sunset
+local Number_of_lights = #Random_lights;						-- numbers of light devices listed above 
+local Simulation = fibaro:getGlobal("Simu_presence");			--value of the global value: Simulation is on or off 
+local Manual_overide = fibaro:getGlobal("overideSimuSunset");	-- if = 1 then the Simulation is forced
+local Start_simulation_time = fibaro:getValue(1, "sunsetHour");	--Start Simulation when sunset
 local End_simulation_time,Sunrise_unix_hour,Sunset_unix_hour,Converted_var,Midnight,End_simulation_time_with_random_max_TurnOff,Sleep_between_TurnOff;
 local Is_first_launch = true;
 local NotifLoop = 0;
-
-YAPS_Engine = {}; 
 
 function Debug(color, message) 
 		fibaro:debug(string.format('<%s style="color:%s;">%s</%s>', "span", color, os.date("%a %d/%m", os.time()).." "..message, "span")); 
 end 
 
-function ExtraDebug(debugMessage) 
-	if ( Show_extra_debug ) then 
-		Debug( "orange", debugMessage); 
-	end 
-end 
+function ExtraDebug(debugMessage)
+	if ( Show_extra_debug ) then
+		Debug( "orange", debugMessage);
+	end
+end
 
-function StandardDebug(debugMessage) 
-	if ( Show_standard_debug ) then 
-		Debug( "white", debugMessage); 
-	end 
-end 
+function StandardDebug(debugMessage)
+	if ( Show_standard_debug ) then
+		Debug( "white", debugMessage);
+	end
+end
 
 function round(num, idp)
-  local mult = 10^(idp or 0)
-  return math.floor(num * mult + 0.5) / mult
+	local mult = 10^(idp or 0)
+	return math.floor(num * mult + 0.5) / mult
 end
 
-function Mail(mailMessage) 
-		mailMessage = os.date("%H:%M", os.time()).." "..mailMessage -- add timestamp to push message
-		fibaro:call(id["ADMIN"], "sendEmail", "Presence Simulator", mailMessage);
-end
-
-function PushMessage(sendPush) 
-	if (Activate_Push) then 
-		sendPush = os.date("%H:%M", os.time()).." "..sendPush -- add timestamp to push message
-    	for i=1, #Smartphones_push do 
-      		fibaro:call(tonumber(Smartphones_push[i]), 'sendPush', sendPush); 
-      		ExtraDebug("Push message ("..sendPush..") sent to mobile: "..tonumber(Smartphones_push[i])); 
-    	end 
-    	if (Activate_FreeSms) then 
-    		fibaro:setGlobal("Activate_FreeSms", sendPush)
-			ExtraDebug("Message ("..sendPush..") sent to Activate_FreeSms"); 
-    	end
-	end 
+function YAPS_Engine:notification(message, subject, param)
+	local message = os.date("%H:%M", os.time()).." "..message or "<vide>";
+	if YAPS_Engine.debug_messages then
+		ExtraDebug("yellow", "Notification : "..message);
+	end
+		if Activate_FreeSms then
+			fibaro:setGlobal("Activate_FreeSms", message)
+			ExtraDebug("Message ("..message..") sent to Activate_FreeSms"); 
+		end
+	if param then
+		for _, notif in ipairs(param) do
+			if YAPS_Engine.debug_messages then
+				ExtraDebug("grey", notif);
+			end
+			-- Envoi Push
+			if notif == "push" and YAPS_Engine.smartphoneID then
+				for _, id in ipairs(YAPS_Engine.smartphoneID) do
+					if YAPS_Engine.debug_messages then
+						ExtraDebug("grey", "Send Push smartphone ID : "..id);
+					end
+					fibaro:call(id, "sendPush", message);
+				end
+			-- Envoi Email
+			elseif notif == "email" and YAPS_Engine.userID then
+				for _, id in ipairs(YAPS_Engine.userID) do
+					if YAPS_Engine.debug_messages then
+						ExtraDebug("grey", "Send Email user ID : "..id);
+					end
+					fibaro:call(id, "sendEmail", subject, message);
+				end
+			-- Envoi SMS
+			elseif notif == "sms" and YAPS_Engine.sms then
+				if YAPS_Engine.debug_messages then
+					ExtraDebug("grey", "Send SMS : VD_ID="..(YAPS_Engine.sms["VD_ID"] or 0).." VD_Button="..(YAPS_Engine.sms["VD_Button"] or "0").." VG_Name="..(YAPS_Engine.sms["VG_Name"] or ""));
+				end
+				fibaro:setGlobal(YAPS_Engine.sms["VG_Name"], message);
+				if YAPS_Engine.sms["VD_ID"] and tonumber(YAPS_Engine.sms["VD_ID"])>0 and YAPS_Engine.sms["VD_Button"] and tonumber(YAPS_Engine.sms["VD_Button"])>0 then
+					fibaro:call(YAPS_Engine.sms["VD_ID"], "pressButton", YAPS_Engine.sms["VD_Button"]);
+				end
+			end
+		end
+	else
+		Debug("orange", "Warning : no notification options given");
+	end
 end
 
 function YAPS_Engine:UnixTimeCalc(Converted_var, hour, min)
-	local time = os.time() ;
-	local date = os.date("*t", time) ;
-	local year = date.year ;
-	local month = date.month ;
-	local day = date.day ;
+	local time = os.time();
+	local date = os.date("*t", time);
+	local year = date.year;
+	local month = date.month;
+	local day = date.day;
 	unix_hour = os.time{year=year, month=month, day=day, hour=hour, min=min, sec=sec};
 	ExtraDebug("converted "..Converted_var..": "..hour..":"..min.." to Unix Time: "..unix_hour..")")
 	return unix_hour
@@ -162,9 +195,9 @@ function YAPS_Engine:ReverseUnixTimeCalc(Converted_var,hour)
 	return reverse_unix
 end
 
-function YAPS_Engine:EndTimeCalc() 
+function YAPS_Engine:EndTimeCalc()
 	local hour,min
-    ExtraDebug ("Current Unix Time: "..os.time()) 
+	ExtraDebug ("Current Unix Time: "..os.time())
 	End_simulation_time = YAPS_Engine:UnixTimeCalc("Original planed End_simulation_time", Stop_hour, Stop_minute); -- generate End_simulation_time (changes at midnight) will not change during Simulation, only when ended
 	Midnight = YAPS_Engine:UnixTimeCalc("Midnight", 00, 00);
 	
@@ -175,19 +208,19 @@ function YAPS_Engine:EndTimeCalc()
 
 	-- if stop hour is between 00 and 12h then add 24 hours to End_simulation_time
 	if tonumber(Stop_hour) <= 12 and (os.time() >= End_simulation_time) then
-		End_simulation_time = End_simulation_time + 24*60*60 
+		End_simulation_time = End_simulation_time + 24*60*60
 		ExtraDebug ("stop hour <= 12, Added 24H to End_simulation_time (End_simulation_time is ending after midnignt)");
 		ExtraDebug ("New End_simulation_time: "..End_simulation_time);
 	end 
 	
 	if Random_max_TurnOff_duration ~= 0 and Number_of_lights > 1 then   -- if Simulation = 1 then slow turn off, else turn off all immediately
-  		Sleep_between_TurnOff = round((math.random(Random_max_TurnOff_duration)/(Number_of_lights-1)),1);
+		Sleep_between_TurnOff = round((math.random(Random_max_TurnOff_duration)/(Number_of_lights-1)),1);
 		Sleep_between_TurnOff = math.random(Random_max_TurnOff_duration)/(Number_of_lights-1);
 		ExtraDebug("Calculated sleeping between each turn off: "..Sleep_between_TurnOff.." min");
-    else
-    	Sleep_between_TurnOff = 0;
+	else
+		Sleep_between_TurnOff = 0;
 		ExtraDebug("No sleeping between turn off");
-    end
+	end
 	End_simulation_time_with_random_max_TurnOff = End_simulation_time + ((Sleep_between_TurnOff*(Number_of_lights-1))*60)
 	ExtraDebug("End_simulation_time_with_random_max_TurnOff: "..End_simulation_time_with_random_max_TurnOff);	
 	
@@ -195,24 +228,24 @@ function YAPS_Engine:EndTimeCalc()
 		Sunset_unix_hour = Sunset_unix_hour - (24*60*60) + 70; -- remove 24h58m50s of sunsettime
 		ExtraDebug ("launch after Midnight and before End_simulation_time, removed 24H to Sunset_unix_hour (Only at the first start)");
 		ExtraDebug ("New SunsetTime: "..Sunset_unix_hour);
-	end 
+	end
 	Is_first_launch = false
-end 
+end
 -- Presence Simulation actions Main loop
 function YAPS_Engine:Launch() 
-    PushMessage("Presence Simulation started. Will stop at: "..YAPS_Engine:ReverseUnixTimeCalc("End_simulation_time", End_simulation_time).." + rand("..Random_max_TurnOff_duration.."min) : "..YAPS_Engine:ReverseUnixTimeCalc("End_simulation_time_with_random_max_TurnOff", End_simulation_time_with_random_max_TurnOff));
-    StandardDebug("Presence Simulation started. Will stop at: "..YAPS_Engine:ReverseUnixTimeCalc("End_simulation_time", End_simulation_time).." + rand("..Random_max_TurnOff_duration.."min) : "..YAPS_Engine:ReverseUnixTimeCalc("End_simulation_time_with_random_max_TurnOff", End_simulation_time_with_random_max_TurnOff));	
+	YAPS_Engine:notification("Presence Simulation started. Will stop at: "..YAPS_Engine:ReverseUnixTimeCalc("End_simulation_time", End_simulation_time).." + rand("..Random_max_TurnOff_duration.."min) : "..YAPS_Engine:ReverseUnixTimeCalc("End_simulation_time_with_random_max_TurnOff", End_simulation_time_with_random_max_TurnOff), "Presence Simulator", {"push"}); -- push only
+	StandardDebug("Presence Simulation started. Will stop at: "..YAPS_Engine:ReverseUnixTimeCalc("End_simulation_time", End_simulation_time).." + rand("..Random_max_TurnOff_duration.."min) : "..YAPS_Engine:ReverseUnixTimeCalc("End_simulation_time_with_random_max_TurnOff", End_simulation_time_with_random_max_TurnOff));	
 	if Lights_always_on[1] ~= nil then YAPS_Engine:TurnOn(Lights_always_on); end
 
-    while ((os.time() <= End_simulation_time) and (Simulation == "1")) or ((Manual_overide == "1")) do 
-		local random_light = tonumber(Random_lights[math.random(Number_of_lights)]) --choose a random light in the list 
-		local lightstatus = fibaro:getValue(random_light, 'value') --get the value of the random light in the list 
-		-- turn on the light if off or turn off if on 
-		if tonumber(lightstatus) == 0 then fibaro:call(random_light, 'turnOn') else fibaro:call(random_light, 'turnOff') end 
-		fibaro:sleep(1000); -- necessary to get back the new status, because HC2 is too fast :-) 
-		lightstatus = fibaro:getValue(random_light, 'value') --get the value of the random light after his update 
+	while ((os.time() <= End_simulation_time) and (Simulation == "1")) or ((Manual_overide == "1")) do
+		local random_light = tonumber(Random_lights[math.random(Number_of_lights)]) --choose a random light in the list
+		local lightstatus = fibaro:getValue(random_light, 'value') --get the value of the random light in the list
+		-- turn on the light if off or turn off if on
+		if tonumber(lightstatus) == 0 then fibaro:call(random_light, 'turnOn') else fibaro:call(random_light, 'turnOff') end
+		fibaro:sleep(1000); -- necessary to get back the new status, because HC2 is too fast :-)
+		lightstatus = fibaro:getValue(random_light, 'value') --get the value of the random light after his update
 		StandardDebug('light ID:'.. fibaro:getName(random_light) ..' status:'..lightstatus);
-		local sleeptime = math.random(Random_max_duration*60000) --random sleep 
+		local sleeptime = math.random(Random_max_duration*60000) --random sleep
 		StandardDebug("Entering loop of " .. round(sleeptime/60000,2) .. " minutes");
 		-- Allows to exit the scene if the Simu_presence global var changes to 0 during the random  sleep
 			local counterexitSimulation = 200
@@ -230,11 +263,11 @@ function YAPS_Engine:Launch()
 				fibaro:sleep(sleeptime/200);
 				end
 			ExtraDebug("Exiting loop of "..round(sleeptime/60000,2).." minutes");
-		local sleeptimemin = math.abs(sleeptime/60000) 
+		local sleeptimemin = math.abs(sleeptime/60000)
 		Simulation = fibaro:getGlobal("Simu_presence"); --verify the global value, if the virtual device is deactivated, the scene stops. 
 		Manual_overide = fibaro:getGlobalValue("overideSimuSunset");
-	end 
-end 
+	end
+end
 	
 function YAPS_Engine:EndSimulation() 
 	if Lights_always_on[1] ~= nil then YAPS_Engine:TurnOff(Random_lights,Lights_always_on); end
@@ -242,67 +275,70 @@ function YAPS_Engine:EndSimulation()
 	if (Simulation == "1") then
 		Debug("yellow","Presence Simulation will restart tomorrow.");
 		Debug("yellow","Sunset is around "..fibaro:getValue(1, "sunsetHour").." + Sunset Shift of "..Sunset_offset.."min = Start Time around "..YAPS_Engine:ReverseUnixTimeCalc("Sunset unix time", Sunset_unix_hour));
-		PushMessage("Presence Simulation will restart tomorrow. Sunset is around "..fibaro:getValue(1, "sunsetHour").." + Sunset Shift of "..Sunset_offset.."min = Start Time around "..YAPS_Engine:ReverseUnixTimeCalc("Sunset unix time", Sunset_unix_hour));
+		YAPS_Engine:notification("Presence Simulation will restart tomorrow. Sunset is around "..fibaro:getValue(1, "sunsetHour").." + Sunset Shift of "..Sunset_offset.."min = Start Time around "..YAPS_Engine:ReverseUnixTimeCalc("Sunset unix time", Sunset_unix_hour), "Presence Simulator", {"push"}); -- push only
 	end
 	NotifLoop = 0; -- will force main loop notifications at end of Simulation
 end
 
 function YAPS_Engine:ExitSimulation()
-	--PushMessage("Presence Simulation is terminated");
+	--YAPS_Engine:notification("Presence Simulation is terminated", "Presence Simulator", {"push"}); -- push only
 	Debug("red","Simu_presence = 0, Aborting Simulation scene");
-	fibaro:abort(); 
+	fibaro:abort();
 end
 
-function YAPS_Engine:TurnOff(group,group2) 
+function YAPS_Engine:TurnOff(group,group2)
 	Debug("red","TurnOff All Simulation lights!");
-	local name, id2; 
-	local ID_devices_group = group; 
-	for i=1, #ID_devices_group do 
-		Simulation = fibaro:getGlobal("Simu_presence"); --verify the global value, if Simulation presence is deactivated
-		if Simulation == "0" then	Sleep_between_TurnOff = 0; end; -- if Simulation ended before End_simulation_time, then no turn off delay
-		if i > 1 then -- wait Number of lights -1 (do not need to wait for the first TurnOff)
-			StandardDebug("Sleeping "..Sleep_between_TurnOff.." minute(s) before next TurnOff");
-			fibaro:sleep(Sleep_between_TurnOff*60000);
-		end
-		id2 = tonumber(ID_devices_group[i]); 
-		fibaro:call(id2, "turnOff"); 
-		name = fibaro:getName(id2); 
-		if (name == nil or name == string.char(0)) then 
-			name = "Unknown" 	
+	local name, id2;
+	local ID_devices_group = group;
+	if ID_devices_group ~= 0 then 
+		for i=1, #ID_devices_group do
+			Simulation = fibaro:getGlobal("Simu_presence"); --verify the global value, if Simulation presence is deactivated
+			if Simulation == "0" then	Sleep_between_TurnOff = 0; end; -- if Simulation ended before End_simulation_time, then no turn off delay
+			if i > 1 then -- wait Number of lights -1 (do not need to wait for the first TurnOff)
+				StandardDebug("Sleeping "..Sleep_between_TurnOff.." minute(s) before next TurnOff");
+				fibaro:sleep(Sleep_between_TurnOff*60000);
+			end
+			id2 = tonumber(ID_devices_group[i]);
+			fibaro:call(id2, "turnOff");
+			name = fibaro:getName(id2);
+			if (name == nil or name == string.char(0)) then
+				name = "Unknown"
+			end
+			StandardDebug("Device: "..name.." Off ");
 		end 
-		StandardDebug("Device: "..name.." Off ");
-	end 
-	
+	end
 	Debug("red","TurnOff All Always_On lights!");
-	local ID_devices_group = group2; 
-	for i=1, #ID_devices_group do 
-		id2 = tonumber(ID_devices_group[i]); 
-		fibaro:call(id2, "turnOff"); 
-		name = fibaro:getName(id2); 
-			if (name == nil or name == string.char(0)) then 
-				name = "Unknown" 	
-			end 
-		StandardDebug("Device: "..name.." Off "); 
-	end 
+	local ID_devices_group = group2;
+	if ID_devices_group ~= 0 then 
+		for i=1, #ID_devices_group do
+			id2 = tonumber(ID_devices_group[i]);
+			fibaro:call(id2, "turnOff");
+			name = fibaro:getName(id2);
+				if (name == nil or name == string.char(0)) then
+					name = "Unknown"
+				end
+			StandardDebug("Device: "..name.." Off ");
+		end
+	end
 	if Lights_On_at_end_Simulation ~= 0 and Simulation == "1" then
 		fibaro:call(Lights_On_at_end_Simulation, "turnOn");
-		name = fibaro:getName(Lights_On_at_end_Simulation); 
-			if (name == nil or name == string.char(0)) then 
+		name = fibaro:getName(Lights_On_at_end_Simulation);
+			if (name == nil or name == string.char(0)) then
 				name = "Unknown" 	
-			end 
+			end
 		Debug("red","Turned On light Lights_On_at_end_Simulation:");
 		Debug("white", name);
 	end
 	if Lights_On_if_Simulation_deactivated ~= 0 and Simulation == "0" then
 		fibaro:call(Lights_On_if_Simulation_deactivated, "turnOn");
-    	name = fibaro:getName(Lights_On_if_Simulation_deactivated); 
-			if (name == nil or name == string.char(0)) then 
-				name = "Unknown" 	
-			end 
+		name = fibaro:getName(Lights_On_if_Simulation_deactivated);
+			if (name == nil or name == string.char(0)) then
+				name = "Unknown"
+			end
 		Debug("red","Turned On light Lights_On_if_Simulation_deactivated:");
 		Debug("white", name);
 	end
-end 
+end
 
 function YAPS_Engine:TurnOn(group) 
 	Debug("red","Turning On Always_On lights:");
@@ -326,7 +362,7 @@ Debug("green", "----------------------------------------------------------------
 ------------------------ Main Loop ----------------------------------
 -- first start notifications
 YAPS_Engine:EndTimeCalc();
-Mail("Scheduled presence Simulation at "..YAPS_Engine:ReverseUnixTimeCalc("Sunset unix time", Sunset_unix_hour).." (Sunset: "..fibaro:getValue(1, "sunsetHour")..")");
+YAPS_Engine:notification("Scheduled presence Simulation at "..YAPS_Engine:ReverseUnixTimeCalc("Sunset unix time", Sunset_unix_hour).." (Sunset: "..fibaro:getValue(1, "sunsetHour")..")", "Presence Simulator", {"email"}); -- mail only
 Debug("green","Sunset is at "..fibaro:getValue(1, "sunsetHour").." + Sunset Shift of "..Sunset_offset.."min = Start Time at "..YAPS_Engine:ReverseUnixTimeCalc("Sunset unix time", Sunset_unix_hour));
 Debug("green","End of Simulation: "..YAPS_Engine:ReverseUnixTimeCalc("End Simulation", End_simulation_time).." + random of "..Random_max_TurnOff_duration.."min");
 Debug("green", "Checking for actions every minute.");
@@ -364,7 +400,7 @@ while true do -- Infinite loop of actions checking, hours calculations, notifica
 	end
 	
 	if NotifLoop <= 120 then --a waiting xx times the fibaro sleep below (2 hours) before resetting counter (and notifying)
-    	if NotifLoop == 120 then NotifLoop = 0 end
+		if NotifLoop == 120 then NotifLoop = 0 end
 		if NotifLoop == 0 then
 		ExtraDebug("Now, checking for actions every minute. Next notify: in 2 hours");
 		end
